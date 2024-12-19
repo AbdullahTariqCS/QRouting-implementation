@@ -91,7 +91,7 @@ class QRouting(Routing):
             name=f'QRRES({self.hostId})', 
             srcIp=self.ipAddress, 
             timeCreated=packet.timeCreated, 
-            tableId=packet.tableId + 1,
+            tableId=packet.tableId + 1, #send request for the new table
             nextHop=packet.srcIp, 
             cost=cost
         )
@@ -110,7 +110,7 @@ class QRouting(Routing):
             # print('host id:', self.hostId, 'table id: ', self.tableId)
             # for key,val in self.table.items(): 
             #     print(f"\t{key}: {'' if val == 10 ** 1000 else val}" )
-            self.table[packet.srcIp] = perf_counter() - packet.timeCreated
+            self.table[packet.srcIp] = perf_counter() - packet.timeCreated + packet.cost
 
         #learning new costs 
         elif self.table[packet.srcIp] != 10 ** 1000: 

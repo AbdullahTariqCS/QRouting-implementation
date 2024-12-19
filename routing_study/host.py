@@ -83,6 +83,11 @@ class Host:
         if packet.nextHop == '': 
             print(f'Host-{self.id}: Dropping {packet.name}')
         else: 
+            if self.id == 1: 
+                print('table id: ', self.routingProtocol.tableId)
+                for key,val in self.routingProtocol.table.items(): 
+                    print(f"\t{key}: {'' if val == 10 ** 1000 else val}" ) 
+                
             heappush(self.packetQueue, [packet.priority, packet])
             
     
