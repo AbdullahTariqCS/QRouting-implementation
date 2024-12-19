@@ -19,20 +19,20 @@ class Network:
         starting_pos = [100, 100, 0] 
 
         for i in range(num_hosts): 
-            routing_table = {f'10.0.0.{j}':  [10 ** 1000, set()] for j in range(1,12)} #nextHop : cost, path
+            routing_table = {f'10.0.0.{j}':  [10 ** 1000, set()] for j in range(1,14)} #nextHop : cost, path
 
-            if i != num_hosts-1: 
-                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], fps=1, destIp='10.0.0.11') 
+            if i < num_hosts-3: 
+                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], fps=1, destIp='10.0.0.13') 
                 with open(f'waypoints-2/waypoint-{i}.json', 'r') as f: 
                     starting_pos = json.load(f)['waypoints'][0]
-                speed = 10
-                radio = Radio(150, displayRange=False)
+                speed = 20
+                radio = Radio(150, displayRange=True, eth=[])
                 waypointFile = f'waypoints-2/waypoint-{i}.json'
             else: 
                 app = udpVideoClient(env, timeFactor, 100) 
                 starting_pos = [500, 15, 0]
                 speed = 0
-                radio = Radio(400)
+                radio = Radio(150, eth=[])
                 waypointFile = ''
         
             host = Host(
@@ -50,7 +50,7 @@ class Network:
                     ipAddress=f'10.0.0.{i+1}', 
                     rreqTimeout=1, 
                     tableResetTimeout = 10,
-                    gsIp = '10.0.0.11', 
+                    gsIp = '10.0.0.13', 
                     learningRate=0.5, 
                     timeFactor = timeFactor
                 ),
@@ -58,22 +58,30 @@ class Network:
                 consoleRes=self.consoleRes, 
                 speed = speed, 
                 waypointFile=waypointFile, 
-                gsIp='10.0.0.11', 
+                gsIp='10.0.0.13', 
                 rreqTimeout=20
             )
                     
-            del routing_table
             self.hosts.append(host)
         
         self.radiomedium = RadioMedium(env, timeFactor= timeFactor, animation = animation, bps = 10e6, host=self.hosts)
 
-        self.hosts[1].radio.displayRange = True
-        self.hosts[1].radio.range = 400
+        # self.hosts[1].radio.displayRange = True
+        # self.hosts[1].radio.range = 400
+        self.hosts[10].apps = {}
+        self.hosts[11].apps = {}
+        self.hosts[10].pos = [180, 300, 50]
+        self.hosts[11].pos = [180, 750, 50]
+        self.hosts[10].radio.eth.append(12)
+        self.hosts[11].radio.eth.append(12)
+        self.hosts[12].radio.eth.append(10)
+        self.hosts[12].radio.eth.append(11)
+
+        
         #add movement and application process 
         self.app_proc = []
         for host in self.hosts: 
             host.addProcesses()
-
 
         #add radio process
         self.env.process(self.radiomedium.start())
@@ -117,7 +125,7 @@ if __name__ == '__main__':
     # env = simpy.Environment()
     timeFactor = 0.1 #1 is equvialent to 1000ms
     env = simpy.rt.RealtimeEnvironment(factor=timeFactor, strict=False)
-    network = Network(env, animation=True, timeFactor=timeFactor, num_hosts=11)
+    network = Network(env, animation=True, timeFactor=timeFactor, num_hosts=13)
     stopEvent = simpy.Event(env)
 
     animation = Animation(dim=[1000, 1000], scale=0.6, stopEvent=stopEvent, hosts=network.hosts, timeFactor=timeFactor)

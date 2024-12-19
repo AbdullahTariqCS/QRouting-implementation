@@ -44,7 +44,6 @@ class Host:
 
 
 
-
     def onPacketLoss(self, packet: Packet): 
         pass
     #     self.routingTable[self.getNextHop()] = 10 ** 1000
