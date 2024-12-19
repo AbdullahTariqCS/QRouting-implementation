@@ -52,7 +52,7 @@ class udpVideoServer(App):
             packet = self.send()
             self.sendToLinkLayer(packet)
             time = int(self.fps / self.timeFactor)
-            yield self.env.timeout(1)
+            yield self.env.timeout(time)
 
     def addProcess(self, env):
         env.process(self.start())

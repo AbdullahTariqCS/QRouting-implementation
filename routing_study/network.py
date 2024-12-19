@@ -1,6 +1,6 @@
 from host import Host
 from radio import Radio, RadioMedium
-from routing import Static, DynamicSplit
+from routing import Static, DynamicSplit, QRouting
 from app import udpVideoClient, udpVideoServer
 from animation_tk import Animation
 from typing import List
@@ -12,17 +12,17 @@ import json
 
 class Network: 
     def __init__(self, env: simpy.Environment, animation, timeFactor, num_hosts): 
-        self.routing = Static()
+        # self.routing = Static()
         self.hosts: List[Host] = []
         self.env = env
         self.consoleRes = simpy.Resource(env, capacity=1)
         starting_pos = [100, 100, 0] 
 
         for i in range(num_hosts): 
-            routing_table = {f'10.0.0.{j}': [0, '' if i == j-1 else f'10.0.0.{(i+2) if i != num_hosts-1 else i}'] for j in range(1,12)}
+            routing_table = {f'10.0.0.{j}':  10 ** 1000 for j in range(1,12)}
 
             if i != num_hosts-1: 
-                app = udpVideoServer(env, timeFactor, 100, [640, 320], 10, '10.0.0.11') 
+                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], fps=10, destIp='10.0.0.11') 
                 with open(f'waypoints-2/waypoint-{i}.json', 'r') as f: 
                     starting_pos = json.load(f)['waypoints'][0]
                 speed = 10
@@ -43,7 +43,16 @@ class Network:
                 ipAddress=f'10.0.0.{i+1}', 
                 apps={100: app},
                 pos = starting_pos.copy(), 
-                routingProtocol=self.routing, 
+                routingProtocol= QRouting(
+                    env=env,
+                    id = i, 
+                    table=routing_table, 
+                    ipAddress=f'10.0.0.{i+1}', 
+                    rreqTimeout=1, 
+                    gsIp = '10.0.0.11', 
+                    learningRate=0.5, 
+                    timeFactor = timeFactor
+                ),
                 routingTable=routing_table.copy(), 
                 consoleRes=self.consoleRes, 
                 speed = speed, 
@@ -98,6 +107,7 @@ class NetworkWithDynamicRouting(Network):
         self.hosts[1].radio.displayRange = True
         self.hosts[2].radio.displayRange = True
 
+
         
 
 
@@ -105,7 +115,7 @@ if __name__ == '__main__':
     # env = simpy.Environment()
     timeFactor = 0.1 #1 is equvialent to 1000ms
     env = simpy.rt.RealtimeEnvironment(factor=timeFactor, strict=False)
-    network = NetworkWithDynamicRouting(env, animation=True, timeFactor=timeFactor, num_hosts=11)
+    network = Network(env, animation=True, timeFactor=timeFactor, num_hosts=11)
     stopEvent = simpy.Event(env)
 
     animation = Animation(dim=[1000, 1000], scale=0.6, stopEvent=stopEvent, hosts=network.hosts, timeFactor=timeFactor)

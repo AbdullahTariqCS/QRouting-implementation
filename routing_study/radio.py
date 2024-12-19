@@ -1,4 +1,4 @@
-from packet import Packet
+from packet import Packet, DataPacket
 from typing import List
 from heapq import heappop
 from host import Host
@@ -61,7 +61,8 @@ class RadioMedium:
                         if not self.inDistance(A, B): 
                             A.onPacketLoss(packet)
                         else: 
-                            if self.animation: self.drawLine(A, B, packet.name if self.getDistance(A, B) > 50 else '', 'blue')
+                            if self.animation and isinstance(packet, DataPacket):
+                                self.drawLine(A, B, packet.name if self.getDistance(A, B) > 50 else '', 'blue')
                             B.onPacketRecieve(packet)
 
                     if not len(A.packetQueue): break
@@ -73,7 +74,7 @@ class RadioMedium:
                 for B in self.hosts.values(): 
                     if self.inDistance(A, B) and A.ipAddress != B.ipAddress: 
                         # print(f'Broadcasting {packet.name}: {A.id} --- {B.id}')
-                        if self.animation : self.drawLine(A, B, packet.name, 'red')
+                        # if self.animation : self.drawLine(A, B, packet.name, 'red')
                         B.onPacketRecieve(packet.copy())
 
             yield self.env.timeout(1) 

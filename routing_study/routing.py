@@ -1,21 +1,35 @@
-from packet import Packet, RREQ, RREQ
+from packet import Packet, RREQ, RRES, Priority, QRREQ, QRRES
 import numpy as np
+from time import perf_counter
 
 class Routing: 
-    def __init__(self, table): 
+    def __init__(self, env, table, hostId, ipAddress, timeFactor): 
         self.table = table.copy()
-
-    def setNextHop(self, packet: Packet): 
+        self.ipAddress = ipAddress
+        self.hostId = hostId
+        self.env = env
+        self.timeFactor = timeFactor
+    
+    def passHeapPushFunc(self, onHeapPush): 
+        self.onHeapPush = onHeapPush
+    
+    def start(): 
         pass
 
-    def updateRoutingTable(): 
+    def sendRREQ(self): 
+        pass
+        
+    def onRREQRecieve(self, packet: RREQ): 
+        self.sendRRES(packet)
+
+    def sendRRES(self, packet: RREQ): 
         pass
     
-    def onPacketLoss(self, routingTable, packet) -> str: #returns the updated nexthop 
+    def onRRESRecieve(self, packet: RRES): 
         pass
 
 class Static(Routing): 
-    def __init__(self): 
+    def __init__(self, routingTable): 
        table = {
            '10.0.0.1': '10.0.0.2', 
            '10.0.0.2': '10.0.0.3', 
@@ -37,56 +51,74 @@ class DynamicSplit(Routing):
     def __init__(self): 
         self.nextHopIdx = 0
     
-        def sendRREQ(self): 
-        #starting reverse bfs
-        packet = RREQ(name=f'Host-{self.id} RREQ', origIp=self.ipAddress, srcIp=self.ipAddress, origPos=self.pos) 
-        print(f'Host-{self.id}: Route broken, Generating RREQ')
-        self.rreqSentTime = self.env.now
-        heappush(self.packetQueue, [packet.priority, packet])
 
-    def sendRRES(self, packet: RREQ, cost = 0): 
-        #starting bfs
-        resPacket = RRES(name=f'Host-{self.id} RRES', srcIp=self.ipAddress, origIp=packet.origIp, path=packet.path.copy(), cost=cost) 
-        print(f'Host-{self.id}: Found Route for RREQ({packet.name})')
-        heappush(self.packetQueue, [resPacket.priority, resPacket])
 
-    def onRREQRecieve(self, packet: RREQ): 
-        if self.ipAddress in packet.path: return 
-        packet = packet.copy()
-        currentNextHop = self.getNextHop()
+class QRouting(Routing): 
+    def __init__(self, env, id, table, ipAddress, rreqTimeout, gsIp, learningRate, timeFactor): 
+        super().__init__(env, table, id, ipAddress, timeFactor)
+        self.initialTable = table.copy()
+        self.rreqTimout = rreqTimeout
+        self.gsIp = gsIp
+        self.learningRate = learningRate
+        self.tableId = 0
+
+    def start(self):
+        def proc(): 
+            while True: 
+                self.sendRREQ()
+                time = int(self.rreqTimout / self.timeFactor)
+                yield self.env.timeout(time)
+        self.env.process(proc())            
+
+    def sendRREQ(self): 
+        packet = QRREQ(f'QRREQ({self.hostId})', self.ipAddress, perf_counter(), self.tableId)
+        self.onHeapPush(packet.copy())
+
+    def onRREQRecieve(self, packet: QRREQ): 
+        # print(f'Host-{self.hostId}: Recived {packet.name}, replying')
+        self.sendRRES(packet)
+
+    def sendRRES(self, packet: QRREQ): 
         if self.ipAddress == self.gsIp: 
-            self.sendRRES(packet)
-        elif currentNextHop != '' and currentNextHop not in packet.path:  
-            self.sendRRES(packet, self.routingTable[currentNextHop])            
-
-        #forward the request
+            cost = 0
         else: 
-            print(f'Host-{self.id}: Recieved RREQ({packet.name}) orig({packet.origIp}) srcIp({packet.srcIp}), broadcasting request')
-            self.routingTable[packet.srcIp] = 10 ** 1000 #indicating that the path from this nexthop is broken
-            self.rreqSentTime = self.env.now #preventing multiple requests
-            packet.path.append(self.ipAddress)
-            packet.srcIp = self.ipAddress
-            heappush(self.packetQueue, [packet.priority, packet])
+            tmp = self.table[packet.srcIp]
+            self.table[packet.srcIp] = 10 ** 1000
+            cost = min(self.table.values())
+            self.table[packet.srcIp] = tmp
+
+        packet = QRRES(
+            name=f'QRRES({self.hostId})', 
+            srcIp=self.ipAddress, 
+            timeCreated=packet.timeCreated, 
+            tableId=packet.tableId + 1,
+            nextHop=packet.srcIp, 
+            cost=cost
+        )
+
+        self.onHeapPush(packet)
     
+    def onRRESRecieve(self, packet: QRRES): 
+        #initializing cost
+        if self.tableId != packet.tableId: 
+            self.table = self.initialTable.copy()
+            self.tableId = packet.tableId
 
-    def onRRESRecieve(self, packet: RRES): 
-        #updates the routing table
-        if self.ipAddress in packet.path: 
-            return
-        
-        print(f'Host-{self.id}: Recieved RRES from {packet.srcIp}. ', end='')
-        packet = packet.copy()
+        if packet.cost == 10 ** 1000: return
+        if self.table[packet.srcIp] == 10 ** 1000: 
+            # print(f'Host-{self.id}: updated path through {packet.srcIp}')
+            # print('host id:', self.hostId, 'table id: ', self.tableId)
+            # for key,val in self.table.items(): 
+            #     print(f"\t{key}: {'' if val == 10 ** 1000 else val}" )
+            self.table[packet.srcIp] = perf_counter() - packet.timeCreated
 
-        self.routingTable[packet.srcIp] = packet.cost #updating the routing table
+        #learning new costs 
+        elif self.table[packet.srcIp] != 10 ** 1000: 
+            # print(f'Host-{self.id}: updated path through {packet.srcIp}')
+            # print('table id: ', self.tableId)
+            # for key,val in self.table.items(): 
+            #     print(f"\t{key}: {val}" )
 
-
-        if packet.nextHopCounter >= 0: 
-            print('Resending new route')
-            packet.srcIp = self.ipAddress
-            packet.cost += 1
-            packet.nextHop = packet.path[-packet.nextHopCounter]
-            packet.nextHopCounter -= 1
-            heappush(self.packetQueue, [packet.priority, packet])
-
+            self.table[packet.srcIp] += self.learningRate * (perf_counter() - packet.timeCreated + packet.cost - self.table[packet.srcIp])
 
         

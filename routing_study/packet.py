@@ -34,43 +34,74 @@ class DataPacket(Packet):
         super().addRouting(srcIp, nextHopIp)
 
 class RREQ(Packet): 
-    def __init__(self, name, srcIp, origIp, origPos): 
-        super().__init__(name=name, plen=20, broadcast=True, priority=Priority.MEDIUM)
-        self.origPos = origPos
-        self.timesent = 0
-        self.origIp = origIp 
-        self.srcIp = srcIp
-        self.path = [origIp]
+    def __init__(self, name, plen, broadcast, priority, nextHop=''):
+        super().__init__(name, plen, broadcast, priority, nextHop)
 
-    def copy(self): 
-        packet = RREQ(
-            name=self.name, 
-            origPos = self.origPos,  
-            origIp = self.origIp, 
-            srcIp = self.srcIp 
-        )
-        packet.path = self.path.copy()
-        packet.timesent = self.timesent
-        return packet
-        
 class RRES(Packet): 
-    def __init__(self, name, path:list, srcIp, origIp, cost): 
-        super().__init__(name=name, plen=20, broadcast=False, priority=Priority.HIGH)
-        self.cost = cost
-        self.path = path 
-        self.srcIp = srcIp
-        self.origIp = origIp
-        self.nextHopCounter = 1
+    def __init__(self, name, plen, broadcast, priority, nextHop=''):
+        super().__init__(name, plen, broadcast, priority, nextHop)
 
-        self.nextHop = path[-self.nextHopCounter]
-        self.nextHopCounter -= 1
+class QRREQ(RREQ): 
+    def __init__(self, name, srcIp, timeCreated, tableId):
+        super().__init__(name, 20, True, priority=Priority.MEDIUM, nextHop='')
+        self.timeCreated = timeCreated
+        self.srcIp = srcIp
+        self.tableId = tableId
 
     def copy(self): 
-        return RRES(
-            name=self.name, 
-            path = self.path.copy(), 
-            srcIp = self.srcIp, 
-            origIp = self.origIp, 
-            cost = self.cost 
-        )
+        return QRREQ(self.name, self.srcIp, self.tableId, self.timeCreated)
+    
+
+class QRRES(RRES): 
+    def __init__(self, name, srcIp, timeCreated, tableId, nextHop, cost):
+        super().__init__(name, 20, False, priority=Priority.HIGH, nextHop=nextHop)
+        self.srcIp = srcIp
+        self.timeCreated = timeCreated
+        self.cost = cost
+        self.tableId = tableId 
+
+    def copy(self): 
+        return QRREQ(self.name, self.timeCreated, self.tableId, self.nextHop, self.cost)
+
+# class RREQ(Packet): 
+#     def __init__(self, name, srcIp, origIp, origPos): 
+#         super().__init__(name=name, plen=20, broadcast=True, priority=Priority.MEDIUM)
+#         self.origPos = origPos
+#         self.timesent = 0
+#         self.origIp = origIp 
+#         self.srcIp = srcIp
+#         self.path = [origIp]
+
+#     def copy(self): 
+#         packet = RREQ(
+#             name=self.name, 
+#             origPos = self.origPos,  
+#             origIp = self.origIp, 
+#             srcIp = self.srcIp 
+#         )
+#         packet.path = self.path.copy()
+#         packet.timesent = self.timesent
+#         return packet
+        
+# class RRES(Packet): 
+#     def __init__(self, name, path:list, srcIp, origIp, cost): 
+#         super().__init__(name=name, plen=20, broadcast=False, priority=Priority.HIGH)
+#         self.cost = cost
+#         self.path = path 
+#         self.srcIp = srcIp
+#         self.origIp = origIp
+#         self.nextHopCounter = 1
+
+#         self.nextHop = path[-self.nextHopCounter]
+#         self.nextHopCounter -= 1
+
+#     def copy(self): 
+#         return RRES(
+#             name=self.name, 
+#             path = self.path.copy(), 
+#             srcIp = self.srcIp, 
+#             origIp = self.origIp, 
+#             cost = self.cost 
+#         )
+
 
