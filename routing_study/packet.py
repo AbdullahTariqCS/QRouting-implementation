@@ -20,7 +20,7 @@ class Packet:
         self.priority < other.priority
 
 class DataPacket(Packet): 
-    def __init__(self, name, srcPort, destPort, destIp, timeSent, plen, checksum=None): 
+    def __init__(self, name, srcPort, destPort, destIp, timeSent, plen, ttl, checksum=None): 
         super().__init__(name=name, plen=plen, broadcast = False, priority=Priority.LOW)
 
         #upd header
@@ -29,6 +29,7 @@ class DataPacket(Packet):
         self.checksum = checksum
         self.destIp = destIp
         self.timeSent = timeSent
+        self.ttl = ttl
     
     def addRouting(self, srcIp, nextHopIp): 
         super().addRouting(srcIp, nextHopIp)
@@ -53,12 +54,13 @@ class QRREQ(RREQ):
     
 
 class QRRES(RRES): 
-    def __init__(self, name, srcIp, timeCreated, tableId, nextHop, cost):
+    def __init__(self, name, srcIp, timeCreated, tableId, nextHop, cost, path: set):
         super().__init__(name, 20, False, priority=Priority.HIGH, nextHop=nextHop)
         self.srcIp = srcIp
         self.timeCreated = timeCreated
         self.cost = cost
         self.tableId = tableId 
+        self.path = path
 
     def copy(self): 
         return QRREQ(self.name, self.timeCreated, self.tableId, self.nextHop, self.cost)

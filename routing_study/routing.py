@@ -54,13 +54,16 @@ class DynamicSplit(Routing):
 
 
 class QRouting(Routing): 
-    def __init__(self, env, id, table, ipAddress, rreqTimeout, gsIp, learningRate, timeFactor): 
+    def __init__(self, env, id, table, ipAddress, rreqTimeout, tableResetTimeout, gsIp, learningRate, timeFactor): 
         super().__init__(env, table, id, ipAddress, timeFactor)
         self.initialTable = table.copy()
         self.rreqTimout = rreqTimeout
         self.gsIp = gsIp
         self.learningRate = learningRate
         self.tableId = 0
+        self.tableResetTimeout = 0
+        self.lastTableUpdatedTime = 0
+        self.requestedTableId = 0
 
     def start(self):
         def proc(): 
@@ -71,7 +74,8 @@ class QRouting(Routing):
         self.env.process(proc())            
 
     def sendRREQ(self): 
-        packet = QRREQ(f'QRREQ({self.hostId})', self.ipAddress, perf_counter(), self.tableId)
+        self.requestedTableId = self.tableId + 1
+        packet = QRREQ(f'QRREQ({self.hostId})', self.ipAddress, perf_counter(), self.requestedTableId)
         self.onHeapPush(packet.copy())
 
     def onRREQRecieve(self, packet: QRREQ): 
@@ -80,45 +84,37 @@ class QRouting(Routing):
 
     def sendRRES(self, packet: QRREQ): 
         if self.ipAddress == self.gsIp: 
-            cost = 0
+            cost, path = 0, set()
         else: 
-            tmp = self.table[packet.srcIp]
-            self.table[packet.srcIp] = 10 ** 1000
-            cost = min(self.table.values())
-            self.table[packet.srcIp] = tmp
+            cost, path = self.table[min(self.table, key=lambda x: self.table[x][0])]
+
+        path.add(self.ipAddress)
 
         packet = QRRES(
             name=f'QRRES({self.hostId})', 
             srcIp=self.ipAddress, 
             timeCreated=packet.timeCreated, 
-            tableId=packet.tableId + 1, #send request for the new table
+            tableId=packet.tableId, #send response for the new table
             nextHop=packet.srcIp, 
-            cost=cost
+            cost=cost,
+            path=path
         )
-
         self.onHeapPush(packet)
-    
+
+
     def onRRESRecieve(self, packet: QRRES): 
-        #initializing cost
         if self.tableId != packet.tableId: 
             self.table = self.initialTable.copy()
             self.tableId = packet.tableId
+        
+        if packet.cost == 10 ** 1000 or self.ipAddress in packet.path or packet.srcIp == self.ipAddress: 
+            self.table[packet.srcIp] = [10 ** 1000, set()]
 
-        if packet.cost == 10 ** 1000: return
-        if self.table[packet.srcIp] == 10 ** 1000: 
-            # print(f'Host-{self.id}: updated path through {packet.srcIp}')
-            # print('host id:', self.hostId, 'table id: ', self.tableId)
-            # for key,val in self.table.items(): 
-            #     print(f"\t{key}: {'' if val == 10 ** 1000 else val}" )
-            self.table[packet.srcIp] = perf_counter() - packet.timeCreated + packet.cost
+        elif self.table[packet.srcIp][0] == 10 ** 1000: 
+            self.table[packet.srcIp] = [perf_counter() - packet.timeCreated + packet.cost, packet.path.copy()]
 
         #learning new costs 
-        elif self.table[packet.srcIp] != 10 ** 1000: 
-            # print(f'Host-{self.id}: updated path through {packet.srcIp}')
-            # print('table id: ', self.tableId)
-            # for key,val in self.table.items(): 
-            #     print(f"\t{key}: {val}" )
-
-            self.table[packet.srcIp] += self.learningRate * (perf_counter() - packet.timeCreated + packet.cost - self.table[packet.srcIp])
-
+        elif self.table[packet.srcIp][0] != 10 ** 1000: 
+            self.table[packet.srcIp][0] += self.learningRate * (perf_counter() - packet.timeCreated + packet.cost - self.table[packet.srcIp][0])
+            self.table[packet.srcIp][1] = packet.path.copy()
         

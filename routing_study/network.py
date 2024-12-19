@@ -19,14 +19,14 @@ class Network:
         starting_pos = [100, 100, 0] 
 
         for i in range(num_hosts): 
-            routing_table = {f'10.0.0.{j}':  10 ** 1000 for j in range(1,12)}
+            routing_table = {f'10.0.0.{j}':  [10 ** 1000, set()] for j in range(1,12)} #nextHop : cost, path
 
             if i != num_hosts-1: 
                 app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], fps=1, destIp='10.0.0.11') 
                 with open(f'waypoints-2/waypoint-{i}.json', 'r') as f: 
                     starting_pos = json.load(f)['waypoints'][0]
                 speed = 10
-                radio = Radio(150, displayRange=True)
+                radio = Radio(150, displayRange=False)
                 waypointFile = f'waypoints-2/waypoint-{i}.json'
             else: 
                 app = udpVideoClient(env, timeFactor, 100) 
@@ -49,6 +49,7 @@ class Network:
                     table=routing_table, 
                     ipAddress=f'10.0.0.{i+1}', 
                     rreqTimeout=1, 
+                    tableResetTimeout = 10,
                     gsIp = '10.0.0.11', 
                     learningRate=0.5, 
                     timeFactor = timeFactor
@@ -66,7 +67,8 @@ class Network:
         
         self.radiomedium = RadioMedium(env, timeFactor= timeFactor, animation = animation, bps = 10e6, host=self.hosts)
 
-
+        self.hosts[1].radio.displayRange = True
+        self.hosts[1].radio.range = 400
         #add movement and application process 
         self.app_proc = []
         for host in self.hosts: 

@@ -37,8 +37,8 @@ class Host:
         routingProtocol.passHeapPushFunc(lambda packet: heappush(self.packetQueue, [packet.priority, packet]))
 
     def getNextHop(self): 
-        ip = min(self.routingProtocol.table, key=self.routingProtocol.table.get)
-        if self.routingProtocol.table[ip] == 10 ** 1000: 
+        ip = min(self.routingProtocol.table, key=lambda x: self.routingProtocol.table[x][0])
+        if self.routingProtocol.table[ip] == 10 ** 1000 or self.ipAddress == ip: 
             return ''
         return ip
 
@@ -62,13 +62,12 @@ class Host:
             self.routingProtocol.onRRESRecieve(packet)
      
         if isinstance(packet, DataPacket): 
+
             if packet.destIp == self.ipAddress: 
                 self.apps[packet.destPort].onRecieve(packet)
-
             elif packet.nextHop == self.ipAddress: 
                 packet.nextHop = self.getNextHop()
                 if packet.nextHop == '': 
-                    # string += f'Dropping Packet {packet.name}'
                     self.onPacketLoss(packet)
                 else: 
                     heappush(self.packetQueue, [packet.priority, packet])
@@ -83,11 +82,6 @@ class Host:
         if packet.nextHop == '': 
             print(f'Host-{self.id}: Dropping {packet.name}')
         else: 
-            if self.id == 1: 
-                print('table id: ', self.routingProtocol.tableId)
-                for key,val in self.routingProtocol.table.items(): 
-                    print(f"\t{key}: {'' if val == 10 ** 1000 else val}" ) 
-                
             heappush(self.packetQueue, [packet.priority, packet])
             
     

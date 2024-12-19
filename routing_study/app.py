@@ -44,7 +44,8 @@ class udpVideoServer(App):
             destPort=100, 
             destIp=self.destIp, 
             timeSent=perf_counter(), 
-            plen=plen
+            plen=plen, 
+            ttl = 10
         )
 
     def start(self): 
