@@ -1,7 +1,7 @@
 from host import Host
 from radio import Radio, RadioMedium
 from routing import Static, DynamicSplit, QRouting
-from app import udpGroundStation, udpVideoServer, SixGClient, SixGRelay
+from app import App, udpGroundStation, udpVideoServer, SixGRouter, SixGRelay
 from animation_tk import Animation
 from typing import List
 from random import randint
@@ -19,20 +19,21 @@ class Network:
         starting_pos = [100, 100, 0] 
 
         for i in range(num_hosts): 
-            routing_table = {f'10.0.0.{j}':  [10 ** 1000, set()] for j in range(1,14)} #nextHop : cost, path
+            routing_table = {f'10.0.0.{j}':  [10 ** 1000, set()] for j in range(1,num_hosts+1)} #nextHop : cost, path
 
-            if i < num_hosts-3: 
-                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], fps=5, destIp='10.0.0.14') 
+            if i < num_hosts-4: 
+                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], delay=2, destIp='10.0.0.14') 
                 with open(f'waypoints-2/waypoint-{i}.json', 'r') as f: 
                     starting_pos = json.load(f)['waypoints'][0]
                 speed = 20
                 radio = Radio(150, displayRange=True, eth=[])
                 waypointFile = f'waypoints-2/waypoint-{i}.json'
+
             else: 
                 if i == num_hosts - 1: 
-                    routerForIp = {f'10.0.0.{j}': f'10.0.0.{10 if j <= 5 else 12}' for j in range(1, 11)}
-                    app = udpGroundStation(env, timeFactor, 100, 2, routerForIp=routerForIp) 
-                else: app = None
+                    routerForIp = {f'10.0.0.{j}': f'10.0.0.{11 if j <= 5 else 13}' for j in range(1, 11)}
+                    app = udpGroundStation(env, timeFactor, port=100, delay=1, packetTimeout=10, routerForIp=routerForIp) 
+                else: app = App(env, 1, 1, 1)
                 starting_pos = [500, 15, 0]
                 speed = 0
                 radio = Radio(150, eth=[])
@@ -53,7 +54,7 @@ class Network:
                     ipAddress=f'10.0.0.{i+1}', 
                     rreqTimeout=1, 
                     tableResetTimeout = 10,
-                    gsIp = '10.0.0.13', 
+                    gsIp = '10.0.0.14', 
                     learningRate=0.5, 
                     timeFactor = timeFactor
                 ),
@@ -61,7 +62,7 @@ class Network:
                 consoleRes=self.consoleRes, 
                 speed = speed, 
                 waypointFile=waypointFile, 
-                gsIp='10.0.0.13', 
+                gsIp='10.0.0.14', 
                 rreqTimeout=20
             )
                     
@@ -72,39 +73,48 @@ class Network:
         # self.hosts[1].radio.displayRange = True
         # self.hosts[1].radio.range = 400
 
-        self.hosts[10].apps = {100: SixGRelay(env, timeFactor, 100, gsNextHop='10.0.0.14', routerNextHop='10.0.0.13')}
-        self.hosts[10].pos = [500, 815, 0]
+        self.hosts[10].apps = {0: SixGRelay(env, timeFactor, 100, 1, gsNextHop='10.0.0.14', routerNextHop='10.0.0.13')}
+        self.hosts[10].pos = [180, 500, 0]
         self.hosts[10].radio.eth.append(12)
+        self.hosts[10].radio.eth.append(13)
+        self.hosts[10].speed = 0
+        self.hosts[10].apps[0].addLinkLayer(lambda packet: self.hosts[10].onSelfRecieve(packet))
 
         self.hosts[11].apps = {
-            100: SixGClient(
-                env, timeFactor, 100, 
-                posBounds=[[500, 0, 110], [500, 400, 110]], 
-                speedDelta=0.2, 
-                maxSpeed=30, 
-                goto=self.hosts[11].goTo, 
+            0: SixGRouter(
+                env, timeFactor, 100, 1, 
+                posBounds=[[500, 100, 110], [500, 500, 110]], 
+                swarmSpeed=20, 
+                maxSpeed=50, 
+                goTo=self.hosts[11].goTo, 
                 getSpeed=self.hosts[11].getSpeed, 
                 setSpeed=self.hosts[11].setSpeed
             )}
+        
         self.hosts[11].pos = [510, 15, 0]
         self.hosts[11].radio.eth.append(13)
-            
+        self.hosts[11].flightMode = 'Guided'
+        self.hosts[11].apps[0].addLinkLayer(lambda packet : self.hosts[11].onSelfRecieve(packet))
+        
         self.hosts[12].apps = {
-            100: SixGClient(
-                env, timeFactor, 100, 
-                posBounds=[[500, 800, 110], [500, 410, 110]], 
-                speedDelta=0.2, 
-                maxSpeed=30, 
-                goto=self.hosts[12].goTo, 
+            0: SixGRouter(
+                env, timeFactor, 100, 1,
+                posBounds=[[500, 900, 110], [500, 510, 110]], 
+                swarmSpeed=20, 
+                maxSpeed=50, 
+                goTo=self.hosts[12].goTo, 
                 getSpeed=self.hosts[12].getSpeed, 
                 setSpeed=self.hosts[12].setSpeed
             )}
 
-        self.hosts[12].pos = [510, 815, 0]
+        self.hosts[12].pos = [510, 920, 0]
         self.hosts[12].radio.eth.append(10)
+        self.hosts[12].flightMode = 'Guided'
+        self.hosts[12].apps[0].addLinkLayer(lambda packet: self.hosts[12].onSelfRecieve(packet))
 
+        self.hosts[13].radio.eth.append(10)
         self.hosts[13].radio.eth.append(11)
-
+        self.hosts[13].speed = 0 
 
         
         #add movement and application process 

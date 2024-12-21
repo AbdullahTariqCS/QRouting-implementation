@@ -1,9 +1,9 @@
 import simpy
 from typing import Dict, List
 import simpy.resources
-from app import App
+from app import App, SixGRelay
 from heapq import heappush
-from packet import Packet, DataPacket, RREQ, RRES
+from packet import Packet, DataPacket, RREQ, RRES, SixGReq
 import json
 import numpy as np
 from routing import Routing
@@ -62,6 +62,10 @@ class Host:
         
         if isinstance(packet, RRES): 
             self.routingProtocol.onRRESRecieve(packet)
+
+        if isinstance(packet, SixGReq)and 0 in self.apps: 
+            print(f'Host-{self.id}: Recieved router repositioning request (f{packet.name})')
+            self.apps[0].onRecieve(packet)
      
         if isinstance(packet, DataPacket): 
 
@@ -91,10 +95,8 @@ class Host:
         for app in self.apps.values(): 
             app.addProcess(self.env)
         self.routingProtocol.start()
-        if self.waypointFile != '': 
-            self.env.process(self.executeMission(self.waypointFile))
+        self.env.process(self.executeMission(self.waypointFile))
         
-
 
 
     def getDistance(self, newPos) :
@@ -119,19 +121,16 @@ class Host:
 
         wCount = -1
         while True: 
-            if self.flightMode == 'Auto' and wCount < len(waypoints): 
-                wCount += 1
-                if not self.move(waypoints[wCount]): break
+            if self.flightMode == 'Auto' and wCount+1 < len(waypoints): 
+                wCount += 1 - self.move(waypoints[wCount])
             elif self.flightMode == 'Guided': 
-                if not self.move(self.newPos): break
-            else: 
-                break
+                self.move(self.newPos)
 
             yield self.env.timeout(1)
          
 
     def move(self, newPos): 
-        distance = self.getDistance()
+        distance = self.getDistance(newPos)
         if distance == 0: return False
         x = (newPos[0] - self.pos[0]) / distance
         y = (newPos[1] - self.pos[1]) / distance

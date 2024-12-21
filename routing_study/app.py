@@ -4,12 +4,13 @@ import simpy
 
 
 class App: 
-    def __init__(self, env: simpy.Environment, timeFactor, port, fps): 
+    def __init__(self, env: simpy.Environment, timeFactor, port, delay): 
         self.env = env
         self.timeFactor = timeFactor
         self.port = port
-        self.fps = fps
-        self.simpyDelay = min(1, int(timeFactor * fps)) 
+        self.fps = delay
+        # self.simpyDelay = max(1, int(1 / (timeFactor * delay))) 
+        self.simpyDelay = delay
 
     def start(self): 
         pass
@@ -27,8 +28,8 @@ class App:
         pass
 
 class udpVideoServer(App): 
-    def __init__(self, env, timeFactor, port, quality, fps, destIp): 
-        super().__init__(env, port=port, timeFactor=timeFactor, fps=fps)
+    def __init__(self, env, timeFactor, port, quality, delay, destIp): 
+        super().__init__(env, port=port, timeFactor=timeFactor, delay=delay)
         self.quality = quality
         self.destIp = destIp
         self.numframes = -1
@@ -65,8 +66,8 @@ class udpGroundStation(App):
     request new routes from routers if a link is not recieved
     The fps of this app should be less than the fps of udpVideoclient so that it can detect the client before sending anymore connection requests
     """
-    def __init__(self, env, timeFactor, port, packetTimeout, routerForIp: dict): 
-        super().__init__(env, port, timeFactor)
+    def __init__(self, env, timeFactor, port,delay, packetTimeout, routerForIp: dict): 
+        super().__init__(env=env, port=port, timeFactor=timeFactor, delay=delay)
         self.packetTimeout = packetTimeout
 
         self.lastRecieved = {} #clientIps: last packet recieved
@@ -91,17 +92,19 @@ class udpGroundStation(App):
             yield self.env.timeout(self.simpyDelay)
             
 
+    def addProcess(self, env):
+        env.process(self.start())
+
     def __copy__(self): 
         return udpGroundStation(self.env, self.port)
         
-
 
 class SixGRelay(App): 
     """
     for the peripheral hosts to establish connection between ground station and routers
     """
-    def __init__(self, env, timeFactor, port, gsNextHop, routerNextHop):
-        super().__init__(env, timeFactor, port)
+    def __init__(self, env, timeFactor, port, delay, gsNextHop, routerNextHop):
+        super().__init__(env=env, timeFactor=timeFactor, port=port, delay=delay)
         self.gsNextHop = gsNextHop
         self.routerNextHop = routerNextHop
     
@@ -111,11 +114,12 @@ class SixGRelay(App):
         self.sendToLinkLayer(packet)
 
 
-class SixGClient(App): 
-    def __init__(self, env, timeFactor, port, posBounds, speedDelta, maxSpeed, getSpeed, setSpeed, goTo):
-        super().__init__(env, timeFactor, port)
 
-        self.speedDelta = speedDelta
+class SixGRouter(App): 
+    def __init__(self, env, timeFactor, port,fps, posBounds, swarmSpeed, maxSpeed, getSpeed, setSpeed, goTo):
+        super().__init__(env=env, timeFactor=timeFactor, port=port, delay=fps)
+
+        self.swarmSpeed = swarmSpeed
         self.speedBound = maxSpeed
         self.getSpeed = getSpeed
         self.setSpeed = setSpeed
@@ -126,23 +130,14 @@ class SixGClient(App):
 
 
     def onRecieve(self, packet: SixGReq):
-        if self.getSpeed <= 1e-6: 
-            self.setSpeed(10) 
+        # if packet.speedUp: breakpoint()
+        # if self.getSpeed() <= 1e-6: 
+        #     self.setSpeed(10) 
 
+        if packet.speedUp : self.setSpeed(self.speedBound)
+        else: self.setSpeed(self.swarmSpeed)
+        # newSpeed = max(min(self.speedDelta * self.getSpeed() + (1 if packet.speedUp else -1) * self.getSpeed(), self.speedBound), 0)
 
-        newSpeed = max(min(self.speedDelta * self.getSpeed() + (packet.speedUp - 1) * self.getSpeed(), self.speedBound), 0)
-
-        self.setSpeed(newSpeed)
         if self.goTo(self.posBounds[self.posCounter]): 
             self.posCounter = (self.posCounter + 1) % 2
             self.goTo(self.posBounds[self.posCounter])
-
-
-    
-
-
-
-
-
-
-

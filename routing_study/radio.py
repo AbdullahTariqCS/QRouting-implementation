@@ -66,6 +66,7 @@ class RadioMedium:
                             # if (A.id == 0 and B.id == 11) or (A.id == 11 and B.id == 0): print('Distance between 0 and 11', self.getDistance(A,B))
                             if self.animation and isinstance(packet, DataPacket):
                                 self.drawLine(A, B, packet.name if self.getDistance(A, B) > 50 else '', 'blue')
+                                if B.id == 12: print('host-12', self.getDistance(A, B))
                             B.onPacketRecieve(packet)
 
                     if not len(A.packetQueue): break
