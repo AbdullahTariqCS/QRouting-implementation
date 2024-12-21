@@ -12,7 +12,7 @@ from copy import copy
 class Host: 
     def __init__(self, env: simpy.Environment, id, timeFactor, radio, ipAddress, apps: Dict[int, App],\
                  pos:List[float], routingProtocol:Routing, routingTable: Dict[str, list], consoleRes : simpy.Resource, speed, 
-                waypointFile, gsIp, rreqTimeout
+                waypointFile, gsIp, rreqTimeout, flightMode = 'Auto'
         ): 
         self.id = id
         self.env = env
@@ -31,6 +31,8 @@ class Host:
         self.gsIp = gsIp
         self.rreqTimeout = rreqTimeout
         self.rreqSentTime = 0
+        self.flightMode = flightMode
+        self.newPos = [0, 0, 0]
         for app in self.apps.values(): 
             app.addLinkLayer(lambda packet: self.onSelfRecieve(packet))
 
@@ -42,7 +44,8 @@ class Host:
             return ''
         return ip
 
-
+    def getSpeed(self): return self.speed
+    def setSpeed(self, speed): self.speed = speed
 
     def onPacketLoss(self, packet: Packet): 
         pass
@@ -93,21 +96,42 @@ class Host:
         
 
 
-    def executeMission(self, path): 
-        with open(path) as f: 
-            data = json.load(f)
-            waypoints = data['waypoints']
 
-        for w in waypoints: 
-            while self.move(w): 
-                yield self.env.timeout(1)
-         
-
-    def move(self, newPos): 
-        distance = pow((self.pos[0] - newPos[0])**2 + 
+    def getDistance(self, newPos) :
+        return pow((self.pos[0] - newPos[0])**2 + 
                     (self.pos[1] - newPos[1])**2 + 
                     (self.pos[2] - newPos[2])**2, 0.5)
 
+    def goTo(self, targetPos): 
+        distance = self.getDistance(targetPos)
+        if distance <= 1e-6: return True #incidation we have reached the targetposition
+        else: 
+            self.newPos = targetPos
+            return False  
+
+
+    def executeMission(self, path): 
+        waypoints = []
+        if self.waypointFile != '': 
+            with open(path) as f: 
+                data = json.load(f)
+                waypoints = data['waypoints']
+
+        wCount = -1
+        while True: 
+            if self.flightMode == 'Auto' and wCount < len(waypoints): 
+                wCount += 1
+                if not self.move(waypoints[wCount]): break
+            elif self.flightMode == 'Guided': 
+                if not self.move(self.newPos): break
+            else: 
+                break
+
+            yield self.env.timeout(1)
+         
+
+    def move(self, newPos): 
+        distance = self.getDistance()
         if distance == 0: return False
         x = (newPos[0] - self.pos[0]) / distance
         y = (newPos[1] - self.pos[1]) / distance

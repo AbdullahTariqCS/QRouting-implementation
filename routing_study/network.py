@@ -1,7 +1,7 @@
 from host import Host
 from radio import Radio, RadioMedium
 from routing import Static, DynamicSplit, QRouting
-from app import udpVideoClient, udpVideoServer
+from app import udpGroundStation, udpVideoServer, SixGClient, SixGRelay
 from animation_tk import Animation
 from typing import List
 from random import randint
@@ -22,14 +22,17 @@ class Network:
             routing_table = {f'10.0.0.{j}':  [10 ** 1000, set()] for j in range(1,14)} #nextHop : cost, path
 
             if i < num_hosts-3: 
-                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], fps=5, destIp='10.0.0.13') 
+                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], fps=5, destIp='10.0.0.14') 
                 with open(f'waypoints-2/waypoint-{i}.json', 'r') as f: 
                     starting_pos = json.load(f)['waypoints'][0]
                 speed = 20
                 radio = Radio(150, displayRange=True, eth=[])
                 waypointFile = f'waypoints-2/waypoint-{i}.json'
             else: 
-                app = udpVideoClient(env, timeFactor, 100) 
+                if i == num_hosts - 1: 
+                    routerForIp = {f'10.0.0.{j}': f'10.0.0.{10 if j <= 5 else 12}' for j in range(1, 11)}
+                    app = udpGroundStation(env, timeFactor, 100, 2, routerForIp=routerForIp) 
+                else: app = None
                 starting_pos = [500, 15, 0]
                 speed = 0
                 radio = Radio(150, eth=[])
@@ -68,14 +71,40 @@ class Network:
 
         # self.hosts[1].radio.displayRange = True
         # self.hosts[1].radio.range = 400
-        self.hosts[10].apps = {}
-        self.hosts[11].apps = {}
-        self.hosts[10].pos = [180, 300, 50]
-        self.hosts[11].pos = [180, 750, 50]
+
+        self.hosts[10].apps = {100: SixGRelay(env, timeFactor, 100, gsNextHop='10.0.0.14', routerNextHop='10.0.0.13')}
+        self.hosts[10].pos = [500, 815, 0]
         self.hosts[10].radio.eth.append(12)
-        self.hosts[11].radio.eth.append(12)
+
+        self.hosts[11].apps = {
+            100: SixGClient(
+                env, timeFactor, 100, 
+                posBounds=[[500, 0, 110], [500, 400, 110]], 
+                speedDelta=0.2, 
+                maxSpeed=30, 
+                goto=self.hosts[11].goTo, 
+                getSpeed=self.hosts[11].getSpeed, 
+                setSpeed=self.hosts[11].setSpeed
+            )}
+        self.hosts[11].pos = [510, 15, 0]
+        self.hosts[11].radio.eth.append(13)
+            
+        self.hosts[12].apps = {
+            100: SixGClient(
+                env, timeFactor, 100, 
+                posBounds=[[500, 800, 110], [500, 410, 110]], 
+                speedDelta=0.2, 
+                maxSpeed=30, 
+                goto=self.hosts[12].goTo, 
+                getSpeed=self.hosts[12].getSpeed, 
+                setSpeed=self.hosts[12].setSpeed
+            )}
+
+        self.hosts[12].pos = [510, 815, 0]
         self.hosts[12].radio.eth.append(10)
-        self.hosts[12].radio.eth.append(11)
+
+        self.hosts[13].radio.eth.append(11)
+
 
         
         #add movement and application process 
@@ -125,7 +154,7 @@ if __name__ == '__main__':
     # env = simpy.Environment()
     timeFactor = 0.1 #1 is equvialent to 1000ms
     env = simpy.rt.RealtimeEnvironment(factor=timeFactor, strict=False)
-    network = Network(env, animation=True, timeFactor=timeFactor, num_hosts=13)
+    network = Network(env, animation=True, timeFactor=timeFactor, num_hosts=14) #10 swarm, 1 gcs, 2 routers, 1 routerGsRelay
     stopEvent = simpy.Event(env)
 
     animation = Animation(dim=[1000, 1000], scale=0.6, stopEvent=stopEvent, hosts=network.hosts, timeFactor=timeFactor)

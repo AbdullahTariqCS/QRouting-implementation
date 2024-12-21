@@ -1,13 +1,15 @@
-from packet import Packet, DataPacket, SixGPacket, SixGRes
+from packet import Packet, DataPacket, SixGReq, SixGRes
 from time import perf_counter
 import simpy
 
 
 class App: 
-    def __init__(self, env: simpy.Environment, timeFactor, port): 
+    def __init__(self, env: simpy.Environment, timeFactor, port, fps): 
         self.env = env
         self.timeFactor = timeFactor
         self.port = port
+        self.fps = fps
+        self.simpyDelay = min(1, int(timeFactor * fps)) 
 
     def start(self): 
         pass
@@ -26,9 +28,8 @@ class App:
 
 class udpVideoServer(App): 
     def __init__(self, env, timeFactor, port, quality, fps, destIp): 
-        super().__init__(env, port=port, timeFactor=timeFactor)
+        super().__init__(env, port=port, timeFactor=timeFactor, fps=fps)
         self.quality = quality
-        self.fps = fps
         self.destIp = destIp
         self.numframes = -1
 
@@ -52,94 +53,91 @@ class udpVideoServer(App):
         while True: 
             packet = self.send()
             self.sendToLinkLayer(packet)
-            time = max(1, int(self.fps * self.timeFactor))
-            yield self.env.timeout(time)
+            yield self.env.timeout(self.simpyDelay)
 
     def addProcess(self, env):
         env.process(self.start())
 
 
-class udpVideoClient(App): 
-    def __init__(self, env, timeFactor, port, packetTimeout, routerIps: dict): 
+class udpGroundStation(App): 
+    """
+    recieves video footage from swarm
+    request new routes from routers if a link is not recieved
+    The fps of this app should be less than the fps of udpVideoclient so that it can detect the client before sending anymore connection requests
+    """
+    def __init__(self, env, timeFactor, port, packetTimeout, routerForIp: dict): 
         super().__init__(env, port, timeFactor)
         self.packetTimeout = packetTimeout
-        self.clients = {} #clients: last packet recieved
-        self.routerIps = routerIps #ip: {}
+
+        self.lastRecieved = {} #clientIps: last packet recieved
+        self.lastSentConnReq = {} #clientIps: last 6g request sent
+        self.routerForIp = routerForIp #ip : router => maps swarm ip to a router
 
     def onRecieve(self, packet: DataPacket):
         delay = perf_counter() -  packet.timeSent
         print("Delay:", delay)
-        self.clients[packet.srcIp] = 0
-
-    def start()
-        #sends 6greq packets to relevant routers, indicating broken connections
-    
-    def __copy__(self): 
-        return udpVideoClient(self.env, self.port)
-        
-
-class SixGServer(App): 
-    def __init__(self, env, timeFactor, port, routerNextHop, routerIps, routerResTimeout, fps):
-        super().__init__(env, timeFactor, port)
-        self.routerNextHop = routerNextHop
-        self.routerResTimeout = routerResTimeout 
-        self.timeOfLastRes = {i:0 for i in routerIps} 
-        self.fps = fps
-
-    def send(self) -> SixGPacket: 
-        packet = SixGPacket()
-        return packet
-
-        
-    def onLinkBreak(ip, rewards:dict): 
-        pass
+        self.lastRecieved[packet.srcIp] = 0
+        packet = SixGReq(name=f"6Greq({packet.srcIp})", nextHop=self.routerForIp[packet.srcIp], speedUp=False)                    
+        self.sendToLinkLayer(packet)
 
     def start(self): 
+        #sends 6greq packets to relevant routers, indicating broken connections
         while True: 
-            packet = self.send()
-            self.sendToLinkLayer(packet)
-            yield self.env.timeout(min(1, int(self.fps * self.timeFactor)))
-    
-    def onRecieve(self, packet: SixGRes):
-        pass
+            for c in self.lastRecieved: 
+                self.lastRecieved[c] += 1
+                if self.lastRecieved[c] >= self.packetTimeout: 
+                    packet = SixGReq(name=f"6Greq({c})", nextHop=self.routerForIp[c], speedUp=True)                    
+                    self.sendToLinkLayer(packet)
+            yield self.env.timeout(self.simpyDelay)
+            
+
+    def __copy__(self): 
+        return udpGroundStation(self.env, self.port)
+        
+
 
 class SixGRelay(App): 
+    """
+    for the peripheral hosts to establish connection between ground station and routers
+    """
     def __init__(self, env, timeFactor, port, gsNextHop, routerNextHop):
         super().__init__(env, timeFactor, port)
         self.gsNextHop = gsNextHop
         self.routerNextHop = routerNextHop
     
-    def onRecieve(self, packet: SixGPacket | SixGRes):
-        if isinstance(packet, SixGPacket): packet.nextHop = self.routerNextHop
+    def onRecieve(self, packet: SixGReq | SixGRes):
+        if isinstance(packet, SixGReq): packet.nextHop = self.routerNextHop
         else: packet.nextHop = self.gsNextHop
         self.sendToLinkLayer(packet)
 
 
 class SixGClient(App): 
-    def __init__(self, env, timeFactor, port, gsNextHop, routerNextHop, alpha, beta):
+    def __init__(self, env, timeFactor, port, posBounds, speedDelta, maxSpeed, getSpeed, setSpeed, goTo):
         super().__init__(env, timeFactor, port)
-        self.costs = {}
-        self.gsNextHop = gsNextHop
-        self.routerNextHop = routerNextHop
 
-        #increases the rewards closest to it, and 
-        self.alpha = alpha
-        self.beta = beta
+        self.speedDelta = speedDelta
+        self.speedBound = maxSpeed
+        self.getSpeed = getSpeed
+        self.setSpeed = setSpeed
 
-
-    def onRecieve(self, packet: SixGPacket | SixGRes):
-        if isinstance(packet, SixGPacket): 
-            #get the position for host using rewards, alpha, and beta
+        self.goTo = goTo 
+        self.posBounds = posBounds.copy()
+        self.posCounter = 0
 
 
-            #forward to the next router
-            packet.nextHop = self.routerNextHop
-            self.sendToLinkLayer(packet)
+    def onRecieve(self, packet: SixGReq):
+        if self.getSpeed <= 1e-6: 
+            self.setSpeed(10) 
 
-        else: 
-            #forward to the ground station
-            packet.nextHop = self.gsNextHop
-            self.sendToLinkLayer(packet)
+
+        newSpeed = max(min(self.speedDelta * self.getSpeed() + (packet.speedUp - 1) * self.getSpeed(), self.speedBound), 0)
+
+        self.setSpeed(newSpeed)
+        if self.goTo(self.posBounds[self.posCounter]): 
+            self.posCounter = (self.posCounter + 1) % 2
+            self.goTo(self.posBounds[self.posCounter])
+
+
     
 
 

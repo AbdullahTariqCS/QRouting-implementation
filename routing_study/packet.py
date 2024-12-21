@@ -65,15 +65,20 @@ class QRRES(RRES):
         return QRREQ(self.name, self.timeCreated, self.tableId, self.nextHop, self.cost)
 
 
-class SixGPacket(Packet): 
+class SixGReq(Packet): 
     """
     Sent by the gc to routers, indicating the reward of each position
     Each router modifies the cost according the their position and forwards it to the next one
     """
-    def __init__(self, name, nextHop, rewards: dict):
+    def __init__(self, name, nextHop, speedUp):
         super().__init__(name, 50, False, Priority.HIGH, nextHop)
-        self.rewards = rewards
+        self.speedUp = speedUp
 
+    def copy(self): 
+        return SixGReq(self.name, self.nextHop, self.speedUp)
+
+    def addRouting(self, srcIp, nextHopIp):
+        self.srcIp = srcIp
 
 class SixGRes(Packet): 
     """
@@ -85,50 +90,14 @@ class SixGRes(Packet):
         self.pos = pos
         self.srcIp = srcIp
 
-     
+    def copy(self): 
+        return SixGRes(self.name, self.nextHop, self.srcIp, self.pos.copy())
+
+    def addRouting(self, srcIp, nextHopIp):
+        self.srcIp = srcIp
+    
 
 
 
-
-# class RREQ(Packet): 
-#     def __init__(self, name, srcIp, origIp, origPos): 
-#         super().__init__(name=name, plen=20, broadcast=True, priority=Priority.MEDIUM)
-#         self.origPos = origPos
-#         self.timesent = 0
-#         self.origIp = origIp 
-#         self.srcIp = srcIp
-#         self.path = [origIp]
-
-#     def copy(self): 
-#         packet = RREQ(
-#             name=self.name, 
-#             origPos = self.origPos,  
-#             origIp = self.origIp, 
-#             srcIp = self.srcIp 
-#         )
-#         packet.path = self.path.copy()
-#         packet.timesent = self.timesent
-#         return packet
-        
-# class RRES(Packet): 
-#     def __init__(self, name, path:list, srcIp, origIp, cost): 
-#         super().__init__(name=name, plen=20, broadcast=False, priority=Priority.HIGH)
-#         self.cost = cost
-#         self.path = path 
-#         self.srcIp = srcIp
-#         self.origIp = origIp
-#         self.nextHopCounter = 1
-
-#         self.nextHop = path[-self.nextHopCounter]
-#         self.nextHopCounter -= 1
-
-#     def copy(self): 
-#         return RRES(
-#             name=self.name, 
-#             path = self.path.copy(), 
-#             srcIp = self.srcIp, 
-#             origIp = self.origIp, 
-#             cost = self.cost 
-#         )
 
 
