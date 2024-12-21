@@ -1,4 +1,4 @@
-from packet import Packet, DataPacket
+from packet import Packet, DataPacket, SixGPacket, SixGRes
 from time import perf_counter
 import simpy
 
@@ -52,7 +52,7 @@ class udpVideoServer(App):
         while True: 
             packet = self.send()
             self.sendToLinkLayer(packet)
-            time = int(self.fps / self.timeFactor)
+            time = max(1, int(self.fps * self.timeFactor))
             yield self.env.timeout(time)
 
     def addProcess(self, env):
@@ -60,13 +60,91 @@ class udpVideoServer(App):
 
 
 class udpVideoClient(App): 
-    def __init__(self, env, timeFactor, port): 
+    def __init__(self, env, timeFactor, port, packetTimeout, routerIps: dict): 
         super().__init__(env, port, timeFactor)
+        self.packetTimeout = packetTimeout
+        self.clients = {} #clients: last packet recieved
+        self.routerIps = routerIps #ip: {}
 
     def onRecieve(self, packet: DataPacket):
-        delay = packet.timeSent - perf_counter()
+        delay = perf_counter() -  packet.timeSent
         print("Delay:", delay)
+        self.clients[packet.srcIp] = 0
+
+    def start()
+        #sends 6greq packets to relevant routers, indicating broken connections
     
     def __copy__(self): 
         return udpVideoClient(self.env, self.port)
         
+
+class SixGServer(App): 
+    def __init__(self, env, timeFactor, port, routerNextHop, routerIps, routerResTimeout, fps):
+        super().__init__(env, timeFactor, port)
+        self.routerNextHop = routerNextHop
+        self.routerResTimeout = routerResTimeout 
+        self.timeOfLastRes = {i:0 for i in routerIps} 
+        self.fps = fps
+
+    def send(self) -> SixGPacket: 
+        packet = SixGPacket()
+        return packet
+
+        
+    def onLinkBreak(ip, rewards:dict): 
+        pass
+
+    def start(self): 
+        while True: 
+            packet = self.send()
+            self.sendToLinkLayer(packet)
+            yield self.env.timeout(min(1, int(self.fps * self.timeFactor)))
+    
+    def onRecieve(self, packet: SixGRes):
+        pass
+
+class SixGRelay(App): 
+    def __init__(self, env, timeFactor, port, gsNextHop, routerNextHop):
+        super().__init__(env, timeFactor, port)
+        self.gsNextHop = gsNextHop
+        self.routerNextHop = routerNextHop
+    
+    def onRecieve(self, packet: SixGPacket | SixGRes):
+        if isinstance(packet, SixGPacket): packet.nextHop = self.routerNextHop
+        else: packet.nextHop = self.gsNextHop
+        self.sendToLinkLayer(packet)
+
+
+class SixGClient(App): 
+    def __init__(self, env, timeFactor, port, gsNextHop, routerNextHop, alpha, beta):
+        super().__init__(env, timeFactor, port)
+        self.costs = {}
+        self.gsNextHop = gsNextHop
+        self.routerNextHop = routerNextHop
+
+        #increases the rewards closest to it, and 
+        self.alpha = alpha
+        self.beta = beta
+
+
+    def onRecieve(self, packet: SixGPacket | SixGRes):
+        if isinstance(packet, SixGPacket): 
+            #get the position for host using rewards, alpha, and beta
+
+
+            #forward to the next router
+            packet.nextHop = self.routerNextHop
+            self.sendToLinkLayer(packet)
+
+        else: 
+            #forward to the ground station
+            packet.nextHop = self.gsNextHop
+            self.sendToLinkLayer(packet)
+    
+
+
+
+
+
+
+

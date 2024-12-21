@@ -51,7 +51,6 @@ class QRREQ(RREQ):
 
     def copy(self): 
         return QRREQ(self.name, self.srcIp, self.tableId, self.timeCreated)
-    
 
 class QRRES(RRES): 
     def __init__(self, name, srcIp, timeCreated, tableId, nextHop, cost, path: set):
@@ -64,6 +63,32 @@ class QRRES(RRES):
 
     def copy(self): 
         return QRREQ(self.name, self.timeCreated, self.tableId, self.nextHop, self.cost)
+
+
+class SixGPacket(Packet): 
+    """
+    Sent by the gc to routers, indicating the reward of each position
+    Each router modifies the cost according the their position and forwards it to the next one
+    """
+    def __init__(self, name, nextHop, rewards: dict):
+        super().__init__(name, 50, False, Priority.HIGH, nextHop)
+        self.rewards = rewards
+
+
+class SixGRes(Packet): 
+    """
+    Sent by routers to gc, indicating their positions. 
+    It also allows the gc to monitor 
+    """
+    def __init__(self, name, nextHop, srcIp, pos):
+        super().__init__(name, 20, False, Priority.HIGH, nextHop)
+        self.pos = pos
+        self.srcIp = srcIp
+
+     
+
+
+
 
 # class RREQ(Packet): 
 #     def __init__(self, name, srcIp, origIp, origPos): 

@@ -22,7 +22,7 @@ class Network:
             routing_table = {f'10.0.0.{j}':  [10 ** 1000, set()] for j in range(1,14)} #nextHop : cost, path
 
             if i < num_hosts-3: 
-                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], fps=1, destIp='10.0.0.13') 
+                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], fps=5, destIp='10.0.0.13') 
                 with open(f'waypoints-2/waypoint-{i}.json', 'r') as f: 
                     starting_pos = json.load(f)['waypoints'][0]
                 speed = 20
