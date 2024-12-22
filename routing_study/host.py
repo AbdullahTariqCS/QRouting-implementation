@@ -10,11 +10,12 @@ from routing import Routing
 from copy import copy
 
 class Host: 
-    def __init__(self, env: simpy.Environment, id, timeFactor, radio, ipAddress, apps: Dict[int, App],\
+    def __init__(self, env: simpy.Environment, id, name, timeFactor, radio, ipAddress, apps: Dict[int, App],\
                  pos:List[float], routingProtocol:Routing, routingTable: Dict[str, list], consoleRes : simpy.Resource, speed, 
                 waypointFile, gsIp, rreqTimeout, flightMode = 'Auto'
         ): 
         self.id = id
+        self.name = name
         self.env = env
         self.timeFactor = timeFactor
         self.radio = radio
@@ -68,7 +69,7 @@ class Host:
             self.routingProtocol.onRRESRecieve(packet)
 
         if isinstance(packet, SixGReq)and 0 in self.apps: 
-            print(f'Host-{self.id}: Recieved router repositioning request (f{packet.name})')
+            print(f'{self.name}: Recieved router repositioning request (f{packet.name})')
             self.apps[0].onRecieve(packet)
      
         if isinstance(packet, DataPacket): 
@@ -81,7 +82,7 @@ class Host:
                     self.onPacketLoss(packet)
                 else: 
                     heappush(self.packetQueue, [packet.priority, packet])
-                    print(f'Host-{self.id}: Recieved {packet.name} from {packet.srcIp}, forwarding to {packet.nextHop}')
+                    print(f'{self.name}: Recieved {packet.name} from {packet.srcIp}, forwarding to {packet.nextHop}')
             else: 
                 string += f'Dropping Packet {packet.name} {packet.nextHop}'
         
@@ -90,7 +91,7 @@ class Host:
     def onSelfRecieve(self, packet: DataPacket): 
         packet.addRouting(self.ipAddress, self.getNextHop())
         if packet.nextHop == '': 
-            print(f'Host-{self.id}: Dropping {packet.name}')
+            print(f'{self.name}: Dropping {packet.name}')
         else: 
             heappush(self.packetQueue, [packet.priority, packet])
             

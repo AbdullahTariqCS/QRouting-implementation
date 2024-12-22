@@ -64,6 +64,7 @@ class QRouting(Routing):
         self.tableResetTimeout = 0
         self.lastTableUpdatedTime = 0
         self.requestedTableId = 0
+        # self.lastSent = {t:0 for t in table}
 
     def start(self):
         def proc(): 
@@ -77,6 +78,7 @@ class QRouting(Routing):
         self.requestedTableId = self.tableId + 1
         packet = QRREQ(f'QRREQ({self.hostId})', self.ipAddress, perf_counter(), self.requestedTableId)
         self.onHeapPush(packet.copy())
+        # self.la
 
     def onRREQRecieve(self, packet: QRREQ): 
         # print(f'Host-{self.hostId}: Recived {packet.name}, replying')

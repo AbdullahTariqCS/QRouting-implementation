@@ -28,13 +28,14 @@ class App:
         pass
 
 class udpVideoServer(App): 
-    def __init__(self, env, timeFactor, port, quality, delay, destIp): 
+    def __init__(self, env, timeFactor, port, quality, delay, destIp, stats): 
         super().__init__(env, port=port, timeFactor=timeFactor, delay=delay)
         self.quality = quality
         self.destIp = destIp
         self.numframes = -1
         self.getPos = None
         self.getNewPos = None
+        self.stats = stats
 
     def send(self) -> DataPacket: 
         """
@@ -43,6 +44,7 @@ class udpVideoServer(App):
         plen = 3 * self.quality[0] * self.quality[1]
         self.numframes += 1
         # print("Sending data from client", self.getPos(), self.getNewPos())
+        self.stats.generatePacket(self.env.now)
         return DataPacket(
             name=f"UdpPacket-{self.numframes}", 
             srcPort=self.port, 
@@ -53,6 +55,7 @@ class udpVideoServer(App):
             ttl = 10, 
             data= {'pos': self.getPos(), 'now': self.env.now, 'north': self.getNewPos()[1] > self.getPos()[1]}
         )
+    
 
     def start(self): 
         while True: 
@@ -69,7 +72,7 @@ class udpGroundStation(App):
     recieves video footage from swarm
     request new routes from routers if a link is not recieved
     """
-    def __init__(self, env, timeFactor, port,delay, packetTimeout, routerForIp: dict, swarmLeaders: set): 
+    def __init__(self, env, timeFactor, port,delay, packetTimeout, routerForIp: dict, swarmLeaders: set, stats): 
         super().__init__(env=env, port=port, timeFactor=timeFactor, delay=delay)
         self.packetTimeout = packetTimeout
 
@@ -79,47 +82,13 @@ class udpGroundStation(App):
         self.Ypos = {}
         self.North = {}
         self.routerForIp = routerForIp #ip : router => maps swarm ip to a router
+        self.stats = stats
 
     def onRecieve(self, packet: DataPacket):
         delay = perf_counter() -  packet.timeSent
         print("Delay:", delay)
-        self.lastRecieved[packet.srcIp] = 0
-        r = self.routerForIp[packet.srcIp]
-        y = packet.data['pos'][1]
-
-        self.Ypos[packet.srcIp] = y
-        self.timeSent[packet.srcIp] = packet.data['now']
-        self.North[packet.srcIp] = packet.data['north']
-
-
-    def start(self): 
-        #sends 6greq packets to relevant routers, indicating broken connections
-        while True: 
-            for c in self.lastRecieved: 
-                self.lastRecieved[c] += 1
-                if self.lastRecieved[c] >= self.packetTimeout and c in self.Ypos: 
-                    r = self.routerForIp[c]
-                    yFilteredList = list(map(lambda x: x[1], filter(lambda x: self.routerForIp[x[0]] == r, self.Ypos.items())))
-                    yPos = mean(yFilteredList)
-                    tFilteredList = list(map(lambda x: x[1], filter(lambda x: self.routerForIp[x[0]] == r, self.timeSent.items())))
-                    timeSent = mean(tFilteredList)
-
-                    NorthCountList = list(map(lambda x: x[1], filter(lambda x: self.routerForIp[x[0]] == r, self.North.items())))
-                    NorthCount = sum(1 for north in NorthCountList if north) >= 1
-
-                    packet = SixGReq(
-                        name=f"6Greq({c} v {self.routerForIp[c]})", 
-                        nextHop=self.routerForIp[c], 
-                        yPos=yPos, 
-                        timeSent=timeSent, 
-                        isNorth = NorthCount
-                    )
-                    self.sendToLinkLayer(packet)
-            yield self.env.timeout(self.simpyDelay)
-            
-
-    def addProcess(self, env):
-        env.process(self.start())
+        self.stats.receivePacket(packet.data['now'])
+         
 
     def __copy__(self): 
         return udpGroundStation(self.env, self.port)

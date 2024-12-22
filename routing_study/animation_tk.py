@@ -9,7 +9,7 @@ import numpy as np
 
 
 class Animation:
-    def __init__(self, dim: Tuple[int, int], scale, stopEvent, hosts: List[Host], timeFactor):
+    def __init__(self, dim: Tuple[int, int], scale, stopEvent, hosts: List[Host], timeFactor, stats):
         self.lines = deque(maxlen=15)  # Limit the number of active lines to prevent memory issues
         self.oldLines = deque(maxlen=15)  # Limit the number of active lines to prevent memory issues
         self.hosts = hosts
@@ -39,6 +39,7 @@ class Animation:
         self.updating = False
         def on_closing():
             stopEvent.succeed()
+            stats.plot()
             self.root.destroy()
             sys.exit()
         self.root.protocol("WM_DELETE_WINDOW", on_closing)
@@ -66,7 +67,7 @@ class Animation:
 
             # Draw the host ID as a label
             label = self.canvas.create_text(
-                x + size + 5, y - 10, text=f"Host {host.id}", fill="black", anchor="w"
+                x + size + 5, y - 10, text=f"{host.name}", fill="black", anchor="w"
             )
             self.host_labels.append(label)
 
