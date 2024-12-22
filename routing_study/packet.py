@@ -20,7 +20,7 @@ class Packet:
         self.priority < other.priority
 
 class DataPacket(Packet): 
-    def __init__(self, name, srcPort, destPort, destIp, timeSent, plen, ttl, checksum=None): 
+    def __init__(self, name, srcPort, destPort, destIp, timeSent, plen, ttl, checksum=None, data={}): 
         super().__init__(name=name, plen=plen, broadcast = False, priority=Priority.LOW)
 
         #upd header
@@ -30,6 +30,7 @@ class DataPacket(Packet):
         self.destIp = destIp
         self.timeSent = timeSent
         self.ttl = ttl
+        self.data = data.copy()
     
     def addRouting(self, srcIp, nextHopIp): 
         super().addRouting(srcIp, nextHopIp)
@@ -70,12 +71,15 @@ class SixGReq(Packet):
     Sent by the gc to routers, indicating the reward of each position
     Each router modifies the cost according the their position and forwards it to the next one
     """
-    def __init__(self, name, nextHop, speedUp):
+    def __init__(self, name, nextHop, yPos, timeSent, isNorth):
         super().__init__(name, 50, False, Priority.HIGH, nextHop)
-        self.speedUp = speedUp
+        self.yPos = yPos
+        self.timeSent = timeSent
+        self.isNorth = isNorth 
+
 
     def copy(self): 
-        return SixGReq(self.name, self.nextHop, self.speedUp)
+        return SixGReq(self.name, self.nextHop, self.yPos.copy(), self.timeSent, self.isNorth)
 
     def addRouting(self, srcIp, nextHopIp):
         self.srcIp = srcIp

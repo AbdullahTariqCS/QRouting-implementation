@@ -31,8 +31,13 @@ class Network:
 
             else: 
                 if i == num_hosts - 1: 
-                    routerForIp = {f'10.0.0.{j}': f'10.0.0.{11 if j <= 5 else 13}' for j in range(1, 11)}
-                    app = udpGroundStation(env, timeFactor, port=100, delay=1, packetTimeout=10, routerForIp=routerForIp) 
+                    routerForIp = {f'10.0.0.{j}': f'10.0.0.{12 if j <= 5 else 11}' for j in range(1, 11)}
+                    app = udpGroundStation(
+                        env, timeFactor, port=100, delay=1, 
+                        packetTimeout=10, 
+                        routerForIp=routerForIp,
+                        swarmLeaders={'10.0.0.3', '10.0.0.8'} 
+                        ) 
                 else: app = App(env, 1, 1, 1)
                 starting_pos = [500, 15, 0]
                 speed = 0
@@ -65,16 +70,17 @@ class Network:
                 gsIp='10.0.0.14', 
                 rreqTimeout=20
             )
-                    
-            self.hosts.append(host)
+
+            self.hosts.append(host) 
         
         self.radiomedium = RadioMedium(env, timeFactor= timeFactor, animation = animation, bps = 10e6, host=self.hosts)
 
-        # self.hosts[1].radio.displayRange = True
-        # self.hosts[1].radio.range = 400
+        for host in self.hosts[:10]: 
+            host.apps[100].getPos = host.getPos
+            host.apps[100].getNewPos = host.getNewPos
 
         self.hosts[10].apps = {0: SixGRelay(env, timeFactor, 100, 1, gsNextHop='10.0.0.14', routerNextHop='10.0.0.13')}
-        self.hosts[10].pos = [180, 500, 0]
+        self.hosts[10].pos = [500, 920, 0]
         self.hosts[10].radio.eth.append(12)
         self.hosts[10].radio.eth.append(13)
         self.hosts[10].speed = 0
@@ -86,14 +92,17 @@ class Network:
                 posBounds=[[500, 100, 110], [500, 500, 110]], 
                 swarmSpeed=20, 
                 maxSpeed=50, 
+
+                #endpoints to control the drone
                 goTo=self.hosts[11].goTo, 
                 getSpeed=self.hosts[11].getSpeed, 
-                setSpeed=self.hosts[11].setSpeed
+                setSpeed=self.hosts[11].setSpeed, 
+                atWaypoint=self.hosts[11].atWaypoint 
             )}
         
-        self.hosts[11].pos = [510, 15, 0]
+        self.hosts[11].pos = [500, 366, 0]
         self.hosts[11].radio.eth.append(13)
-        self.hosts[11].flightMode = 'Guided'
+        # self.hosts[11].flightMode = 'Guided'
         self.hosts[11].apps[0].addLinkLayer(lambda packet : self.hosts[11].onSelfRecieve(packet))
         
         self.hosts[12].apps = {
@@ -104,12 +113,13 @@ class Network:
                 maxSpeed=50, 
                 goTo=self.hosts[12].goTo, 
                 getSpeed=self.hosts[12].getSpeed, 
-                setSpeed=self.hosts[12].setSpeed
+                setSpeed=self.hosts[12].setSpeed,
+                atWaypoint=self.hosts[12].atWaypoint 
             )}
 
-        self.hosts[12].pos = [510, 920, 0]
+        self.hosts[12].pos = [510, 632, 0]
         self.hosts[12].radio.eth.append(10)
-        self.hosts[12].flightMode = 'Guided'
+        # self.hosts[12].flightMode = 'Guided'
         self.hosts[12].apps[0].addLinkLayer(lambda packet: self.hosts[12].onSelfRecieve(packet))
 
         self.hosts[13].radio.eth.append(10)
@@ -128,33 +138,6 @@ class Network:
     
     def passAddLineFunction(self, func): 
         self.radiomedium.passLineFunction(func)
-
-
-class NetworkWithDynamicRouting(Network): 
-    def __init__(self, *args, **kwargs): 
-        super().__init__(*args, **kwargs)
-
-        routing_table = {
-            '10.0.0.1': {f'10.0.0.{i}': 10 ** 1000 if i != 2 else 0 for i in range(1, 12)}, 
-            '10.0.0.2': {f'10.0.0.{i}': 10 ** 1000 if i != 3 else 0 for i in range(1, 12)}, 
-            '10.0.0.3': {f'10.0.0.{i}': 10 ** 1000 if i != 11 else 0 for i in range(1, 12)}, 
-            '10.0.0.4': {f'10.0.0.{i}': 10 ** 1000 if i != 3 else 0 for i in range(1, 12)}, 
-            '10.0.0.5': {f'10.0.0.{i}': 10 ** 1000 if i != 4 else 0 for i in range(1, 12)}, 
-            '10.0.0.6': {f'10.0.0.{i}': 10 ** 1000 if i != 7 else 0 for i in range(1, 12)}, 
-            '10.0.0.7': {f'10.0.0.{i}': 10 ** 1000 if i != 8 else 0 for i in range(1, 12)}, 
-            '10.0.0.8': {f'10.0.0.{i}': 10 ** 1000 if i != 3 else 0 for i in range(1, 12)}, 
-            '10.0.0.9': {f'10.0.0.{i}': 10 ** 1000 if i != 8 else 0 for i in range(1, 12)}, 
-            '10.0.0.10': {f'10.0.0.{i}': 10 ** 1000 if i != 9 else 0 for i in range(1, 12)}, 
-            '10.0.0.11': {f'10.0.0.{i}': 10 ** 1000 for i in range(1, 12)}, 
-        }
-        for host in self.hosts: 
-            host.routingTable = routing_table[host.ipAddress].copy()
-            host.routingProtocol = DynamicSplit()
-            host.radio.displayRange = False
-
-        self.hosts[1].radio.range = 400
-        self.hosts[1].radio.displayRange = True
-        self.hosts[2].radio.displayRange = True
 
 
         

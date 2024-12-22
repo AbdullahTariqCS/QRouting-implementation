@@ -1,7 +1,7 @@
 from packet import Packet, DataPacket, SixGReq, SixGRes
 from time import perf_counter
 import simpy
-
+from statistics import mean
 
 class App: 
     def __init__(self, env: simpy.Environment, timeFactor, port, delay): 
@@ -33,6 +33,8 @@ class udpVideoServer(App):
         self.quality = quality
         self.destIp = destIp
         self.numframes = -1
+        self.getPos = None
+        self.getNewPos = None
 
     def send(self) -> DataPacket: 
         """
@@ -40,6 +42,7 @@ class udpVideoServer(App):
         """
         plen = 3 * self.quality[0] * self.quality[1]
         self.numframes += 1
+        # print("Sending data from client", self.getPos(), self.getNewPos())
         return DataPacket(
             name=f"UdpPacket-{self.numframes}", 
             srcPort=self.port, 
@@ -47,7 +50,8 @@ class udpVideoServer(App):
             destIp=self.destIp, 
             timeSent=perf_counter(), 
             plen=plen, 
-            ttl = 10
+            ttl = 10, 
+            data= {'pos': self.getPos(), 'now': self.env.now, 'north': self.getNewPos()[1] > self.getPos()[1]}
         )
 
     def start(self): 
@@ -64,30 +68,52 @@ class udpGroundStation(App):
     """
     recieves video footage from swarm
     request new routes from routers if a link is not recieved
-    The fps of this app should be less than the fps of udpVideoclient so that it can detect the client before sending anymore connection requests
     """
-    def __init__(self, env, timeFactor, port,delay, packetTimeout, routerForIp: dict): 
+    def __init__(self, env, timeFactor, port,delay, packetTimeout, routerForIp: dict, swarmLeaders: set): 
         super().__init__(env=env, port=port, timeFactor=timeFactor, delay=delay)
         self.packetTimeout = packetTimeout
 
         self.lastRecieved = {} #clientIps: last packet recieved
         self.lastSentConnReq = {} #clientIps: last 6g request sent
+        self.timeSent = {}
+        self.Ypos = {}
+        self.North = {}
         self.routerForIp = routerForIp #ip : router => maps swarm ip to a router
 
     def onRecieve(self, packet: DataPacket):
         delay = perf_counter() -  packet.timeSent
         print("Delay:", delay)
         self.lastRecieved[packet.srcIp] = 0
-        packet = SixGReq(name=f"6Greq({packet.srcIp})", nextHop=self.routerForIp[packet.srcIp], speedUp=False)                    
-        self.sendToLinkLayer(packet)
+        r = self.routerForIp[packet.srcIp]
+        y = packet.data['pos'][1]
+
+        self.Ypos[packet.srcIp] = y
+        self.timeSent[packet.srcIp] = packet.data['now']
+        self.North[packet.srcIp] = packet.data['north']
+
 
     def start(self): 
         #sends 6greq packets to relevant routers, indicating broken connections
         while True: 
             for c in self.lastRecieved: 
                 self.lastRecieved[c] += 1
-                if self.lastRecieved[c] >= self.packetTimeout: 
-                    packet = SixGReq(name=f"6Greq({c})", nextHop=self.routerForIp[c], speedUp=True)                    
+                if self.lastRecieved[c] >= self.packetTimeout and c in self.Ypos: 
+                    r = self.routerForIp[c]
+                    yFilteredList = list(map(lambda x: x[1], filter(lambda x: self.routerForIp[x[0]] == r, self.Ypos.items())))
+                    yPos = mean(yFilteredList)
+                    tFilteredList = list(map(lambda x: x[1], filter(lambda x: self.routerForIp[x[0]] == r, self.timeSent.items())))
+                    timeSent = mean(tFilteredList)
+
+                    NorthCountList = list(map(lambda x: x[1], filter(lambda x: self.routerForIp[x[0]] == r, self.North.items())))
+                    NorthCount = sum(1 for north in NorthCountList if north) >= 1
+
+                    packet = SixGReq(
+                        name=f"6Greq({c} v {self.routerForIp[c]})", 
+                        nextHop=self.routerForIp[c], 
+                        yPos=yPos, 
+                        timeSent=timeSent, 
+                        isNorth = NorthCount
+                    )
                     self.sendToLinkLayer(packet)
             yield self.env.timeout(self.simpyDelay)
             
@@ -114,30 +140,58 @@ class SixGRelay(App):
         self.sendToLinkLayer(packet)
 
 
-
 class SixGRouter(App): 
-    def __init__(self, env, timeFactor, port,fps, posBounds, swarmSpeed, maxSpeed, getSpeed, setSpeed, goTo):
+    def __init__(self, env, timeFactor, port, fps, posBounds, swarmSpeed, maxSpeed, getSpeed, setSpeed, goTo, atWaypoint):
         super().__init__(env=env, timeFactor=timeFactor, port=port, delay=fps)
 
         self.swarmSpeed = swarmSpeed
-        self.speedBound = maxSpeed
+        self.maxSpeed = maxSpeed
         self.getSpeed = getSpeed
         self.setSpeed = setSpeed
+        self.atWaypoint = atWaypoint
 
         self.goTo = goTo 
         self.posBounds = posBounds.copy()
         self.posCounter = 0
+        self.goingToWaypoint = False
 
+    def start(self): 
+        while True: 
+            if self.atWaypoint(): 
+                self.setSpeed(0)
+                self.goingToWaypoint = False 
+            yield self.env.timeout(self.simpyDelay)
+     
 
     def onRecieve(self, packet: SixGReq):
-        # if packet.speedUp: breakpoint()
-        # if self.getSpeed() <= 1e-6: 
-        #     self.setSpeed(10) 
+        #predict position and go to that position + set the appropriate direction
+        # time = distance / speed
+        # if not (self.posBounds[0][1] <= packet.yPos <= self.posBounds[1][1]): return
 
-        if packet.speedUp : self.setSpeed(self.speedBound)
-        else: self.setSpeed(self.swarmSpeed)
-        # newSpeed = max(min(self.speedDelta * self.getSpeed() + (1 if packet.speedUp else -1) * self.getSpeed(), self.speedBound), 0)
+        time = (self.env.now - packet.timeSent) * self.timeFactor 
+        predictedYPos = packet.yPos + (self.swarmSpeed * time)
 
-        if self.goTo(self.posBounds[self.posCounter]): 
-            self.posCounter = (self.posCounter + 1) % 2
-            self.goTo(self.posBounds[self.posCounter])
+
+        range_y = self.posBounds[1][1] - self.posBounds[0][1]
+        if predictedYPos < self.posBounds[0][1]:
+            excess = self.posBounds[0][1] - predictedYPos
+            bounces = excess // range_y
+            predictedYPos = self.posBounds[0][1] + (excess % range_y)
+            # Reverse direction if odd number of bounces
+            # if bounces % 2 == 1:
+            #     packet.isNorth = not packet.isNorth
+
+        elif predictedYPos > self.posBounds[1][1]:
+            excess = predictedYPos - self.posBounds[1][1]
+            bounces = excess // range_y
+            predictedYPos = self.posBounds[1][1] - (excess % range_y)
+            # Reverse direction if odd number of bounces
+            # if bounces % 2 == 1:
+            #     packet.isNorth = not packet.isNorth
+
+        print(packet.name, packet.yPos, predictedYPos, self.env.now - packet.timeSent, packet.isNorth)
+        # breakpoint()
+        
+        self.setSpeed(self.maxSpeed)
+        self.goingToWaypoint = True
+        self.goTo([self.posBounds[0][0], predictedYPos, self.posBounds[0][1]])

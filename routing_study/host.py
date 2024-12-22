@@ -36,6 +36,7 @@ class Host:
         for app in self.apps.values(): 
             app.addLinkLayer(lambda packet: self.onSelfRecieve(packet))
 
+
         routingProtocol.passHeapPushFunc(lambda packet: heappush(self.packetQueue, [packet.priority, packet]))
 
     def getNextHop(self): 
@@ -46,6 +47,9 @@ class Host:
 
     def getSpeed(self): return self.speed
     def setSpeed(self, speed): self.speed = speed
+    def atWaypoint(self): return self.getDistance(self.newPos) < 1e-3
+    def getPos(self): return self.pos.copy()
+    def getNewPos(self): return self.newPos.copy()
 
     def onPacketLoss(self, packet: Packet): 
         pass
@@ -98,11 +102,11 @@ class Host:
         self.env.process(self.executeMission(self.waypointFile))
         
 
-
     def getDistance(self, newPos) :
         return pow((self.pos[0] - newPos[0])**2 + 
                     (self.pos[1] - newPos[1])**2 + 
                     (self.pos[2] - newPos[2])**2, 0.5)
+
 
     def goTo(self, targetPos): 
         distance = self.getDistance(targetPos)
@@ -122,6 +126,7 @@ class Host:
         wCount = -1
         while True: 
             if self.flightMode == 'Auto' and wCount+1 < len(waypoints): 
+                self.newPos = waypoints[wCount].copy()
                 wCount += 1 - self.move(waypoints[wCount])
             elif self.flightMode == 'Guided': 
                 self.move(self.newPos)
@@ -136,6 +141,7 @@ class Host:
         y = (newPos[1] - self.pos[1]) / distance
         z = (newPos[2] - self.pos[2]) / distance
 
+        
         step_distance = min(self.speed * self.timeFactor, distance)
         
         self.pos[0] += x * step_distance
