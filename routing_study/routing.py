@@ -64,21 +64,26 @@ class QRouting(Routing):
         self.tableResetTimeout = 0
         self.lastTableUpdatedTime = 0
         self.requestedTableId = 0
-        # self.lastSent = {t:0 for t in table}
+        self.lastSent = {t:0 for t in table}
+        self.tableResetTimeout = tableResetTimeout
 
     def start(self):
         def proc(): 
             while True: 
                 self.sendRREQ()
                 time = int(self.rreqTimout / self.timeFactor)
-                yield self.env.timeout(time)
+                yield self.env.timeout(1)
         self.env.process(proc())            
 
     def sendRREQ(self): 
         self.requestedTableId = self.tableId + 1
         packet = QRREQ(f'QRREQ({self.hostId})', self.ipAddress, perf_counter(), self.requestedTableId)
         self.onHeapPush(packet.copy())
-        # self.la
+
+        # for ip, t in self.lastSent.items(): 
+        #     self.lastSent[ip] += 1
+        #     if t >= self.tableResetTimeout: 
+        #         self.table[ip] = [10 ** 1000, set()]
 
     def onRREQRecieve(self, packet: QRREQ): 
         # print(f'Host-{self.hostId}: Recived {packet.name}, replying')
@@ -90,7 +95,7 @@ class QRouting(Routing):
         else: 
             cost, path = self.table[min(self.table, key=lambda x: self.table[x][0])]
 
-        path.add(self.ipAddress)
+        # path.add(self.ipAddress)
 
         packet = QRRES(
             name=f'QRRES({self.hostId})', 

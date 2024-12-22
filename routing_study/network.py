@@ -8,7 +8,7 @@ from typing import List
 from random import randint
 import simpy
 import simpy.rt
-import threading
+import threading 
 import json
 
 class Network: 
@@ -23,7 +23,7 @@ class Network:
             routing_table = {f'10.0.0.{j}':  [10 ** 1000, set()] for j in range(1,num_hosts+1)} #nextHop : cost, path
 
             if i < 10: 
-                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], delay=2, destIp='10.0.0.11', stats = stats) 
+                app = udpVideoServer(env, timeFactor=timeFactor, port=100, quality=[640, 320], delay=1, destIp='10.0.0.11', stats = stats) 
                 with open(f'waypoints-2/waypoint-{i}.json', 'r') as f: 
                     starting_pos = json.load(f)['waypoints'][0]
                 speed = 20
@@ -53,6 +53,7 @@ class Network:
                 id=i, 
                 name=name,
                 timeFactor=timeFactor, 
+                stats = stats,
                 radio=radio, 
                 ipAddress=f'10.0.0.{i+1}', 
                 apps={100: app},
@@ -63,7 +64,7 @@ class Network:
                     table=routing_table, 
                     ipAddress=f'10.0.0.{i+1}', 
                     rreqTimeout=1, 
-                    tableResetTimeout = 10,
+                    tableResetTimeout = 3,
                     gsIp = '10.0.0.11', 
                     learningRate=0.5, 
                     timeFactor = timeFactor
@@ -78,7 +79,7 @@ class Network:
 
             self.hosts.append(host) 
         
-        self.radiomedium = RadioMedium(env, timeFactor= timeFactor, animation = animation, bps = 10e6, host=self.hosts)
+        self.radiomedium = RadioMedium(env, timeFactor= timeFactor, animation = animation, bps = 10e6, host=self.hosts, stats=stats)
 
         for host in self.hosts[:10]: 
             host.apps[100].getPos = host.getPos
@@ -87,37 +88,40 @@ class Network:
 
         self.hosts[10].radio.eth.append(11)
 
+        # self.hosts[11].apps = {}
+        # self.hosts[11].pos = [180, 60, 0]
+        # self.hosts[11].name = 'Switch'
+        # self.hosts[11].radio.eth.append(10)
+        # self.hosts[11].radio.eth.append(12)
+        # self.hosts[11].radio.eth.append(13)
+        # self.hosts[11].radio.eth.append(14)
+        # self.hosts[11].radio.eth.append(15)
+
+
         self.hosts[11].apps = {}
-        self.hosts[11].pos = [180, 60, 0]
-        self.hosts[11].name = 'Switch'
+        self.hosts[11].pos = [500, 200, 0]
+        self.hosts[11].name = 'Router-1'
         self.hosts[11].radio.eth.append(10)
         self.hosts[11].radio.eth.append(12)
-        self.hosts[11].radio.eth.append(13)
-        self.hosts[11].radio.eth.append(14)
-        self.hosts[11].radio.eth.append(15)
 
 
         self.hosts[12].apps = {}
-        self.hosts[12].pos = [180, 300, 0]
-        self.hosts[12].name = 'Router-1'
+        self.hosts[12].pos = [500, 400, 0]
+        self.hosts[12].name = 'Router-2'
         self.hosts[12].radio.eth.append(11)
-
+        self.hosts[12].radio.eth.append(13)
 
         self.hosts[13].apps = {}
-        self.hosts[13].pos = [180, 500, 0]
-        self.hosts[13].name = 'Router-2'
-        self.hosts[13].radio.eth.append(11)
+        self.hosts[13].pos = [500, 600, 0]
+        self.hosts[13].name = 'Router-3'
+        self.hosts[13].radio.eth.append(12)
+        self.hosts[13].radio.eth.append(14)
+
 
         self.hosts[14].apps = {}
-        self.hosts[14].pos = [180, 700, 0]
-        self.hosts[14].name = 'Router-3'
-        self.hosts[14].radio.eth.append(11)
-
-
-        self.hosts[15].apps = {}
-        self.hosts[15].pos = [180, 900, 0]
-        self.hosts[15].name = 'Router-4'
-        self.hosts[15].radio.eth.append(11)
+        self.hosts[14].pos = [500, 800, 0]
+        self.hosts[14].name = 'Router-4'
+        self.hosts[14].radio.eth.append(13)
 
         #add movement and application process 
         self.app_proc = []
@@ -134,13 +138,12 @@ class Network:
 
         
 
-
 if __name__ == '__main__': 
     # env = simpy.Environment()
     timeFactor = 0.1 #1 is equvialent to 1000ms
     env = simpy.rt.RealtimeEnvironment(factor=timeFactor, strict=False)
-    stats = PacketLoss(1)
-    network = Network(env, animation=True, timeFactor=timeFactor, stats=stats, num_hosts=16) #10 swarm, 1 gcs, 4 routers, 1 switch
+    stats = PacketLoss(10, timeFactor)
+    network = Network(env, animation=True, timeFactor=timeFactor, stats=stats, num_hosts=15) #10 swarm, 1 gcs, 4 routers 3
     stopEvent = simpy.Event(env)
 
     animation = Animation(dim=[1000, 1000], scale=0.6, stopEvent=stopEvent, hosts=network.hosts, timeFactor=timeFactor, stats=stats)

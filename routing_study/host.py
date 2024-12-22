@@ -3,6 +3,7 @@ from typing import Dict, List
 import simpy.resources
 from app import App, SixGRelay
 from heapq import heappush
+from stats import PacketLoss
 from packet import Packet, DataPacket, RREQ, RRES, SixGReq
 import json
 import numpy as np
@@ -10,7 +11,7 @@ from routing import Routing
 from copy import copy
 
 class Host: 
-    def __init__(self, env: simpy.Environment, id, name, timeFactor, radio, ipAddress, apps: Dict[int, App],\
+    def __init__(self, env: simpy.Environment, id, name, timeFactor, stats : PacketLoss, radio, ipAddress, apps: Dict[int, App],\
                  pos:List[float], routingProtocol:Routing, routingTable: Dict[str, list], consoleRes : simpy.Resource, speed, 
                 waypointFile, gsIp, rreqTimeout, flightMode = 'Auto'
         ): 
@@ -18,6 +19,7 @@ class Host:
         self.name = name
         self.env = env
         self.timeFactor = timeFactor
+        self.stats = stats
         self.radio = radio
         self.ipAddress = ipAddress
         self.apps = apps #{port : App}
@@ -53,7 +55,13 @@ class Host:
     def getNewPos(self): return self.newPos.copy()
 
     def onPacketLoss(self, packet: Packet): 
-        pass
+        if isinstance(packet, DataPacket): 
+            packet.ttl -= 1
+            if packet.ttl <= 0: 
+                self.stats.lostPacket(packet.data['now'])
+            else: 
+                packet.data['now'] = self.env.now
+                heappush(self.packetQueue, [packet.priority, packet])
     #     self.routingTable[self.getNextHop()] = 10 ** 1000
     #     if self.env.now - self.rreqSentTime >= self.rreqTimeout: 
     #         self.sendRREQ()
@@ -90,10 +98,7 @@ class Host:
                 
     def onSelfRecieve(self, packet: DataPacket): 
         packet.addRouting(self.ipAddress, self.getNextHop())
-        if packet.nextHop == '': 
-            print(f'{self.name}: Dropping {packet.name}')
-        else: 
-            heappush(self.packetQueue, [packet.priority, packet])
+        heappush(self.packetQueue, [packet.priority, packet])
             
     
     def addProcesses(self): 

@@ -11,11 +11,12 @@ class Radio:
         self.eth = eth
         
 class RadioMedium: 
-    def __init__(self, env: simpy.Environment, timeFactor, animation, bps, host: List[Host]): 
+    def __init__(self, env: simpy.Environment, timeFactor, animation, bps, host: List[Host], stats): 
         self.hosts = {h.ipAddress: h for h in host}
         self.bps = int(bps * timeFactor)
         self.env = env
         self.animation = animation
+        self.stats = stats
     
     def passLineFunction(self, func): 
         self.drawLine = func
@@ -66,8 +67,10 @@ class RadioMedium:
                             # if (A.id == 0 and B.id == 11) or (A.id == 11 and B.id == 0): print('Distance between 0 and 11', self.getDistance(A,B))
                             if self.animation and isinstance(packet, DataPacket):
                                 self.drawLine(A, B, packet.name if self.getDistance(A, B) > 50 else '', 'blue')
-                                if B.id == 12: print('host-12', self.getDistance(A, B))
                             B.onPacketRecieve(packet)
+                    elif packet.nextHop == '':
+                        A.onPacketLoss(packet)
+
 
                     if not len(A.packetQueue): break
                     packet : Packet = A.packetQueue[0][1]
@@ -81,5 +84,6 @@ class RadioMedium:
                         # print(f'Broadcasting {packet.name}: {A.id} --- {B.id}')
                         # if self.animation : self.drawLine(A, B, packet.name, 'red')
                         B.onPacketRecieve(packet.copy())
+            self.stats.updateTime(self.env.now)
 
             yield self.env.timeout(1) 

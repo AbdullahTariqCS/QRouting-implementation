@@ -85,9 +85,10 @@ class udpGroundStation(App):
         self.stats = stats
 
     def onRecieve(self, packet: DataPacket):
-        delay = perf_counter() -  packet.timeSent
+        delay = (self.env.now -  packet.data['now']) * self.timeFactor
         print("Delay:", delay)
         self.stats.receivePacket(packet.data['now'])
+        self.stats.avgDelay(packet.data['now'], delay)
          
 
     def __copy__(self): 
