@@ -33,9 +33,10 @@ class PacketLoss:
         times = range(0, self.time, self.delay) 
         # received = [self.packetRecieved[t] if t in self.packetRecieved else 0 for t in times]
         # generated = [self.packetsGenerated[t] if t in self.packetsGenerated else 0 for t in times]
-        lost = [self.packetsLost[t] if t in self.packetsLost else 0 for t in times]
+        lost = [int(self.packetsLost[t]) if t in self.packetsLost else 0 for t in times]
         delay = [self.packetsDelay[t] if t in self.packetsDelay else 0 for t in times]
         times = [t * self.timeFactor for t in times]
+
         averagePacketLost = 0
         averagePacketLostList = []
 
@@ -54,13 +55,13 @@ class PacketLoss:
 
         ax1.plot(times, lost, label='Packets Lost')
         # ax1.plot(times, averagePacketLostList, label='Average Packets Lost')
-        ax1.set_xlabel('Time')
+        ax1.set_xlabel('Time (s)')
         ax1.set_ylabel('Packets')
         ax1.set_title('Packet Lost Over Time')
         ax1.legend()
 
         ax2.plot(times, delay, label='Packets Delay (s)')
-        ax2.set_xlabel('Time')
+        ax2.set_xlabel('Time (s)')
         ax2.set_ylabel('Delay (s)')
         ax2.set_title('Packet Delay Over Time')
         ax2.legend()

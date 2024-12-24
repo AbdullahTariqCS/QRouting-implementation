@@ -95,7 +95,7 @@ class QRouting(Routing):
         else: 
             cost, path = self.table[min(self.table, key=lambda x: self.table[x][0])]
 
-        # path.add(self.ipAddress)
+        path.add(self.ipAddress)
 
         packet = QRRES(
             name=f'QRRES({self.hostId})', 
@@ -113,10 +113,12 @@ class QRouting(Routing):
         if self.tableId != packet.tableId: 
             self.table = self.initialTable.copy()
             self.tableId = packet.tableId
-        
+
+        #resetting cost 
         if packet.cost == 10 ** 1000 or self.ipAddress in packet.path or packet.srcIp == self.ipAddress: 
             self.table[packet.srcIp] = [10 ** 1000, set()]
 
+        #initializing costs
         elif self.table[packet.srcIp][0] == 10 ** 1000: 
             self.table[packet.srcIp] = [perf_counter() - packet.timeCreated + packet.cost, packet.path.copy()]
 

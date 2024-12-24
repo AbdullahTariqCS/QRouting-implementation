@@ -10,8 +10,8 @@ import numpy as np
 
 class Animation:
     def __init__(self, dim: Tuple[int, int], scale, stopEvent, hosts: List[Host], timeFactor, stats):
-        self.lines = deque(maxlen=15)  # Limit the number of active lines to prevent memory issues
-        self.oldLines = deque(maxlen=15)  # Limit the number of active lines to prevent memory issues
+        self.lines = deque(maxlen=20)  # Limit the number of active lines to prevent memory issues
+        self.oldLines = deque(maxlen=20)  # Limit the number of active lines to prevent memory issues
         self.hosts = hosts
         self.width, self.height = dim[0]* scale, dim[1]*scale
         self.timeFactor = timeFactor
