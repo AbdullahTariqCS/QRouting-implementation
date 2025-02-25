@@ -55,6 +55,20 @@ Developed using **Python** and the **SimPy** library, this simulation models a 1
 
 ---
 
+## **High-Level Class Design**  
+![Class Diagram](img/Class_drawing.png)  
+
+The code follows an **observer pattern**, where the `RadioMedium` class is responsible for managing packet transmission. It invokes the `sendPacket()` function to deliver packets to the host associated with the packet’s IP address.  
+
+---
+
+## **Results**  
+![Routing Results](img/Figure_1.png)  
+
+The results of the routing study demonstrate a clear reduction in latency over time, highlighting the effectiveness of the adaptive Q-routing algorithm. Furthermore, packet loss remains minimal, with no more than three packets lost per second, even under high-traffic conditions.
+
+---
+
 ## **Installation and Usage**  
 
 1. **Clone the repository:**  
