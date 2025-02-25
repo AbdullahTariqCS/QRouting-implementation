@@ -56,7 +56,7 @@ Developed using **Python** and the **SimPy** library, this simulation models a 1
 ---
 
 ## **High-Level Class Design**  
-![Class Diagram](img/Class_drawing.png)  
+![Class Diagram](img/Class_Drawing.png)  
 
 The code follows an **observer pattern**, where the `RadioMedium` class is responsible for managing packet transmission. It invokes the `sendPacket()` function to deliver packets to the host associated with the packet’s IP address.  
 
