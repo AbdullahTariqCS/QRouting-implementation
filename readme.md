@@ -67,6 +67,9 @@ The code follows an **observer pattern**, where the `RadioMedium` class is respo
 
 The results of the routing study demonstrate a clear reduction in latency over time, highlighting the effectiveness of the adaptive Q-routing algorithm. Furthermore, packet loss remains minimal, with no more than three packets lost per second, even under high-traffic conditions.
 
+## **Demonstration**
+[![demo](img/demo.png)](https://youtu.be/7W6rYr-FJD8)
+
 ---
 
 ## **Installation and Usage**  
